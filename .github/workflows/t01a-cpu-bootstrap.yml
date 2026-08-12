@@ -36,42 +36,30 @@ jobs:
 
       - name: Download bounded real conveyor positives
         run: |
-          mkdir -p data/inspectsafe
+          mkdir -p data/conveyor_pos
           python - <<'PY'
           from pathlib import Path
           from huggingface_hub import list_repo_files, hf_hub_download
 
-          repo = 'Tetrabot2026/InspecSafe-V1'
+          repo = 'edgeimpulse/cubes-on-conveyor-belt'
           files = list_repo_files(repo, repo_type='dataset')
-          candidates = [
-              p for p in files
-              if p.lower().endswith(('.jpg', '.jpeg', '.png'))
-              and 'annotations' in p.lower()
-              and 'coal_conveyor' in p.lower()
-          ]
-          # One visible-light frame per waypoint/folder avoids near-duplicate leakage.
-          by_parent = {}
-          for p in sorted(candidates):
-              by_parent.setdefault(str(Path(p).parent), p)
-          unique = list(by_parent.values())
-          if len(unique) < 64:
-              raise RuntimeError(f'Only {len(unique)} unique coal-conveyor waypoint images found')
-          n = min(192, len(unique))
-          step = len(unique) / n
-          selected = [unique[int(i * step)] for i in range(n)]
+          candidates = [p for p in files if p.lower().endswith(('.jpg', '.jpeg', '.png'))]
+          if len(candidates) < 48:
+              raise RuntimeError(f'Only {len(candidates)} directly accessible conveyor images found')
+          selected = sorted(candidates)[:min(72, len(candidates))]
           for i, p in enumerate(selected, 1):
               hf_hub_download(
                   repo_id=repo,
                   filename=p,
                   repo_type='dataset',
-                  local_dir='data/inspectsafe',
+                  local_dir='data/conveyor_pos',
               )
               if i % 24 == 0 or i == len(selected):
-                  print(f'downloaded {i}/{len(selected)} conveyor waypoint images')
-          Path('inspectsafe_selection.txt').write_text('\n'.join(selected) + '\n', encoding='utf-8')
-          print('candidate_files=', len(candidates), 'unique_waypoints=', len(unique), 'selected=', len(selected))
+                  print(f'downloaded {i}/{len(selected)} conveyor images')
+          Path('conveyor_selection.txt').write_text('\n'.join(selected) + '\n', encoding='utf-8')
+          print('candidate_files=', len(candidates), 'selected=', len(selected))
           PY
-          sha256sum inspectsafe_selection.txt | tee inspectsafe_selection.sha256
+          sha256sum conveyor_selection.txt | tee conveyor_selection.sha256
 
       - name: Download COCO hard negatives
         run: |
@@ -85,13 +73,13 @@ jobs:
       - name: Build balanced bootstrap manifest
         run: |
           python v2/training/build_t01a_bootstrap_manifest.py \
-            --positive-root data/inspectsafe \
-            --positive-source inspectsafe_v1_coal_conveyor \
-            --positive-license CC-BY-4.0 \
+            --positive-root data/conveyor_pos \
+            --positive-source edgeimpulse_cubes_on_conveyor_belt \
+            --positive-license Apache-2.0 \
             --negative-root data/coco/val2017 \
             --out data/manifests/t01a_cpu_bootstrap.csv \
-            --max-positive 192 \
-            --max-negative 192 \
+            --max-positive 72 \
+            --max-negative 72 \
             --positive-chunk 1 \
             --negative-chunk 8
           python - <<'PY'
@@ -117,8 +105,8 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts/t01a_cpu_bootstrap
-          cp inspectsafe_selection.txt artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
-          cp inspectsafe_selection.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp conveyor_selection.txt artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp conveyor_selection.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
           cp coco_val2017.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
           cp data/manifests/t01a_cpu_bootstrap.csv artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
           python -m pip freeze > artifacts/t01a_cpu_bootstrap/pip_freeze.txt
@@ -148,6 +136,6 @@ jobs:
             artifacts/t01a_cpu_bootstrap/pip_freeze.txt
             artifacts/t01a_cpu_bootstrap/*.sha256
             artifacts/t01a_cpu_bootstrap/t01a_cpu_bootstrap.csv
-            artifacts/t01a_cpu_bootstrap/inspectsafe_selection.txt
+            artifacts/t01a_cpu_bootstrap/conveyor_selection.txt
           if-no-files-found: warn
           retention-days: 14
