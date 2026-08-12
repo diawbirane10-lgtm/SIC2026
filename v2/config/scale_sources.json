@@ -1,0 +1,58 @@
+{
+  "version": "2026-08-12.training-01",
+  "purpose": "Document where FLOWTRUST inherits large-scale representation learning and which large public corpora may be sampled for hard negatives/domain transfer without uncontrolled web scraping.",
+  "sources": [
+    {
+      "id": "dinov3_lvd_1689m",
+      "kind": "inherited_pretraining",
+      "model": "DINOv3 ViT-L/16",
+      "scale": "1.689B web images in the upstream DINOv3 pretraining corpus",
+      "use_in_flowtrust": "Start from pretrained representation; do not attempt to reproduce billion-image pretraining. Specialize with conveyor/industrial data and hard negatives.",
+      "license_action": "Use official DINOv3 weights only under their model license; retain license notice."
+    },
+    {
+      "id": "dasheng_272k_hours",
+      "kind": "inherited_pretraining",
+      "model": "Dasheng-0.6B",
+      "scale": "272,000 hours of general audio",
+      "upstream_mix": ["VGGSound", "AudioSet", "MTG-Jamendo", "ACAV100M"],
+      "use_in_flowtrust": "Reuse broad acoustic representations, then adapt on SSCC conveyor audio/vibration and evaluate leave-condition-out generalization.",
+      "license_action": "Dasheng repository/checkpoints Apache-2.0; each downstream source keeps its original terms."
+    },
+    {
+      "id": "open_images_v7_hard_negatives",
+      "kind": "curated_scale_source",
+      "scale": "9,178,275 images total; 16M boxes; 2.8M instance masks; 61.4M image-level labels",
+      "use_in_flowtrust": "Curate non-conveyor hard negatives and scene-diversity negatives for the vision scene gate. Never download/train blindly on the whole corpus.",
+      "selection": [
+        "human-verified labels first",
+        "explicit non-conveyor classes: person, room, wall, road, animal, food, furniture, landscape, vehicle interiors, office scenes",
+        "industrial-but-non-conveyor hard negatives: machinery, tools, pipes, warehouse scenes where available",
+        "retain source image ID, landing URL, author and license metadata"
+      ],
+      "license_action": "Annotations CC BY 4.0. Open Images lists images as CC BY 2.0 but explicitly tells users to verify each image license; FLOWTRUST manifest must reject records without verified image-level license metadata."
+    },
+    {
+      "id": "tennessee_eastman_extended_scale",
+      "kind": "large_process_corpus",
+      "scale": "132.96 GB; 28 faults x 6 modes x 500 stochastic repeats, plus mode transitions and setpoint changes",
+      "use_in_flowtrust": "Stream balanced subsets for Chronos-2 adaptation and reserve entire seeds/modes as closed tests.",
+      "license_action": "CC0. Keep publication/DOI provenance even though attribution is not legally required."
+    },
+    {
+      "id": "industrial_maintenance_2m",
+      "kind": "large_domain_text_corpus",
+      "scale": "2,097,558 rows (~1M sensor-tag records + ~1M maintenance work orders)",
+      "use_in_flowtrust": "Domain vocabulary, retrieval, data-quality robustness and tool-selection examples for the operator copilot. Synthetic records are never treated as authoritative plant procedures.",
+      "license_action": "Apache-2.0. Preserve dataset card provenance."
+    },
+    {
+      "id": "metropt3_real_operations",
+      "kind": "real_operational_timeseries",
+      "scale": "1,516,948 rows, 15 features",
+      "use_in_flowtrust": "Additional real-world predictive-maintenance/anomaly transfer set for pressure, temperature, motor current and valve-state dynamics.",
+      "license_action": "CC BY 4.0."
+    }
+  ],
+  "rule": "Scale is inherited or sampled with provenance. FLOWTRUST does not scrape millions of arbitrary web images without labels, license metadata or split control."
+}

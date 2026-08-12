@@ -1,0 +1,141 @@
+name: FLOWTRUST T01-A CPU bootstrap
+
+on:
+  push:
+    branches: [v2-model-rebuild]
+    paths:
+      - '.github/workflows/t01a-cpu-bootstrap.yml'
+      - 'v2/training/t01_scene_gate.py'
+      - 'v2/training/build_t01a_bootstrap_manifest.py'
+  workflow_dispatch:
+
+jobs:
+  scene-gate-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+    steps:
+      - name: Checkout V2 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install CPU training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install 'transformers>=4.56,<5' 'huggingface-hub>=0.30' 'scikit-learn>=1.6,<1.8' pandas joblib pillow numpy
+
+      - name: Download bounded real conveyor positives
+        run: |
+          mkdir -p data/conveyor_pos
+          python - <<'PY'
+          from pathlib import Path
+          from huggingface_hub import list_repo_files, hf_hub_download
+
+          repo = 'edgeimpulse/cubes-on-conveyor-belt'
+          files = list_repo_files(repo, repo_type='dataset')
+          candidates = [p for p in files if p.lower().endswith(('.jpg', '.jpeg', '.png'))]
+          if len(candidates) < 48:
+              raise RuntimeError(f'Only {len(candidates)} directly accessible conveyor images found')
+          selected = sorted(candidates)[:min(72, len(candidates))]
+          for i, p in enumerate(selected, 1):
+              hf_hub_download(
+                  repo_id=repo,
+                  filename=p,
+                  repo_type='dataset',
+                  local_dir='data/conveyor_pos',
+              )
+              if i % 24 == 0 or i == len(selected):
+                  print(f'downloaded {i}/{len(selected)} conveyor images')
+          Path('conveyor_selection.txt').write_text('\n'.join(selected) + '\n', encoding='utf-8')
+          print('candidate_files=', len(candidates), 'selected=', len(selected))
+          PY
+          sha256sum conveyor_selection.txt | tee conveyor_selection.sha256
+
+      - name: Download COCO hard negatives
+        run: |
+          curl -L --fail --retry 5 --retry-delay 10 --max-time 1200 \
+            -o val2017.zip \
+            'http://images.cocodataset.org/zips/val2017.zip'
+          sha256sum val2017.zip | tee coco_val2017.sha256
+          mkdir -p data/coco
+          unzip -q val2017.zip -d data/coco
+
+      - name: Build balanced bootstrap manifest
+        run: |
+          python v2/training/build_t01a_bootstrap_manifest.py \
+            --positive-root data/conveyor_pos \
+            --positive-source edgeimpulse_cubes_on_conveyor_belt \
+            --positive-license Apache-2.0 \
+            --negative-root data/coco/val2017 \
+            --out data/manifests/t01a_cpu_bootstrap.csv \
+            --max-positive 72 \
+            --max-negative 72 \
+            --positive-chunk 1 \
+            --negative-chunk 8
+          python - <<'PY'
+          import pandas as pd
+          p='data/manifests/t01a_cpu_bootstrap.csv'
+          d=pd.read_csv(p)
+          print(d.groupby(['source','label']).size())
+          print('rows', len(d), 'groups', d.group.nunique())
+          PY
+
+      - name: Run DINOv2-L 304M scene-gate bootstrap on CPU
+        run: |
+          mkdir -p artifacts/t01a_cpu_bootstrap
+          /usr/bin/time -v python v2/training/t01_scene_gate.py \
+            --manifest data/manifests/t01a_cpu_bootstrap.csv \
+            --model facebook/dinov2-large \
+            --batch-size 2 \
+            --allow-cpu \
+            --outdir artifacts/t01a_cpu_bootstrap \
+            2>&1 | tee artifacts/t01a_cpu_bootstrap/run.log
+
+      - name: Record provenance
+        if: always()
+        run: |
+          mkdir -p artifacts/t01a_cpu_bootstrap
+          cp conveyor_selection.txt artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp conveyor_selection.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp coco_val2017.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp data/manifests/t01a_cpu_bootstrap.csv artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          python -m pip freeze > artifacts/t01a_cpu_bootstrap/pip_freeze.txt
+          python - <<'PY' > artifacts/t01a_cpu_bootstrap/runtime.txt
+          import os, platform, torch
+          print('python=', platform.python_version())
+          print('platform=', platform.platform())
+          print('torch=', torch.__version__)
+          print('cuda_available=', torch.cuda.is_available())
+          print('github_sha=', os.environ.get('GITHUB_SHA'))
+          PY
+          if [ -f artifacts/t01a_cpu_bootstrap/metrics.json ]; then
+            cat artifacts/t01a_cpu_bootstrap/metrics.json
+          fi
+
+      - name: Upload T01-A0 evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOWTRUST_T01A0_CPU_${{ github.sha }}
+          path: |
+            artifacts/t01a_cpu_bootstrap/metrics.json
+            artifacts/t01a_cpu_bootstrap/closed_test_predictions.csv
+            artifacts/t01a_cpu_bootstrap/scene_gate_head.joblib
+            artifacts/t01a_cpu_bootstrap/run.log
+            artifacts/t01a_cpu_bootstrap/runtime.txt
+            artifacts/t01a_cpu_bootstrap/pip_freeze.txt
+            artifacts/t01a_cpu_bootstrap/*.sha256
+            artifacts/t01a_cpu_bootstrap/t01a_cpu_bootstrap.csv
+            artifacts/t01a_cpu_bootstrap/conveyor_selection.txt
+          if-no-files-found: warn
+          retention-days: 14

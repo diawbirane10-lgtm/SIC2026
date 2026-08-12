@@ -1,0 +1,148 @@
+{
+  "registry_version": "2026-08-12.training-01",
+  "selection_rule": "Prefer conveyor-specific and real electromechanical data with clear reuse terms; use generic industrial datasets only as auxiliary transfer or robustness evidence.",
+  "datasets": [
+    {
+      "id": "iron_ore_conveyor_2025",
+      "modality": ["image", "video"],
+      "priority": "P0",
+      "purpose": ["conveyor_scene_recognition", "foreign_object_detection", "normal_vs_anomaly", "ROI_learning"],
+      "source": "https://data.mendeley.com/datasets/s25x2bnshz/1",
+      "doi": "10.17632/s25x2bnshz.1",
+      "license": "CC BY 4.0",
+      "verified": true,
+      "notes": "120 FPS, 1280x720 top-down iron-ore conveyor; normal/anomalous folders and YOLO-style subset. Directly relevant to material-on-belt vision."
+    },
+    {
+      "id": "coalad_2026",
+      "modality": ["image", "pixel_mask"],
+      "priority": "P0",
+      "purpose": ["unstructured_conveyor_anomaly", "foreign_object_localization", "hard_negative_training"],
+      "source": "https://www.modelscope.cn/datasets/lyfjwp/CoalAD",
+      "code": "https://github.com/xjpp2016/USAD",
+      "paper": "arXiv:2602.07694",
+      "license": "VERIFY_DATASET_TERMS_BEFORE_WEIGHT_DISTRIBUTION",
+      "verified": false,
+      "notes": "Coal/gangue conveyor scenes with dust, wear, occlusion and low-contrast foreign objects such as wood, ropes/nets and bags; official repo includes three training branches and fusion inference."
+    },
+    {
+      "id": "beltcrack_2025",
+      "modality": ["sequential_image"],
+      "priority": "P1",
+      "purpose": ["belt_surface_health", "crack_detection", "sequence_consistency"],
+      "source": "https://github.com/UESTC-nnLab/BeltCrack",
+      "paper": "arXiv:2506.17892",
+      "license": "Apache-2.0 repository; verify dataset-specific terms",
+      "verified": "repo_verified",
+      "notes": "Sequential industrial conveyor-belt crack dataset; useful for belt-health branch, not for AFR material-flow labels."
+    },
+    {
+      "id": "sscc_2026",
+      "modality": ["audio", "vibration", "supplemental_video"],
+      "priority": "P0",
+      "purpose": ["conveyor_fault_detection", "fault_classification", "audio_vibration_fusion", "noise_robustness"],
+      "source": "https://yucongzh.github.io/SSCC-Dataset/",
+      "code": "https://github.com/yucongzh/SSCC-Fault-Benchmark",
+      "paper": "arXiv:2603.07130",
+      "license": "CC BY 4.0 reported by dataset project; retain attribution metadata",
+      "verified": "benchmark_repo_verified",
+      "notes": "3 audio + 4 vibration channels; normal plus dry lubrication, guide-rail misalignment, chain slack and screw-drop/obstruction; multiple speeds/loads and factory noise."
+    },
+    {
+      "id": "mcc5_thu_motor_2026",
+      "modality": ["three_phase_current", "triaxial_vibration", "torque", "key_phase"],
+      "priority": "P0",
+      "purpose": ["motor_fault_diagnosis", "electromechanical_fusion", "variable_speed_load_generalization", "compound_faults"],
+      "source": "https://data.mendeley.com/datasets/6s3dggj9mw/1",
+      "code": "https://github.com/liuzy0708/MCC5-THU-Motor-Benchmark-Datasets",
+      "doi": "10.17632/6s3dggj9mw.1",
+      "license": "CC BY 4.0",
+      "verified": true,
+      "notes": "282 runs x 90 s at 12.8 kHz; synchronized 8-channel measurements; electrical, mechanical and compound faults under steady/transitional working conditions."
+    },
+    {
+      "id": "zzu_mcc5_motor_2025",
+      "modality": ["current", "vibration", "speed"],
+      "priority": "P1",
+      "purpose": ["motor_fault_scale_up", "cross_dataset_validation"],
+      "source": "https://data.mendeley.com/datasets/r3yycxfyjf/1",
+      "doi": "10.17632/r3yycxfyjf.1",
+      "license": "CC BY 4.0",
+      "verified": true,
+      "size": "7.51 GB",
+      "notes": "Healthy, bearing, rotor, stator and compound fault cases at 12.8 kHz."
+    },
+    {
+      "id": "mcc5_thu_gearbox_2024",
+      "modality": ["vibration", "torque", "speed"],
+      "priority": "P1",
+      "purpose": ["transmission_fault_diagnosis", "drive_train_transfer"],
+      "source": "https://data.mendeley.com/datasets/p92gj2732w/2",
+      "doi": "10.17632/p92gj2732w.2",
+      "license": "CC BY 4.0",
+      "verified": true,
+      "size": "6.44 GB",
+      "notes": "Variable speed/load gearbox health, wear, pitting, cracks, broken/missing teeth and compound faults."
+    },
+    {
+      "id": "tennessee_eastman_extended",
+      "modality": ["multivariate_process_timeseries"],
+      "priority": "P0",
+      "purpose": ["process_fault_detection", "temporal_foundation_finetuning", "mode_shift", "decision_support"],
+      "source": "https://data.dtu.dk/articles/dataset/Tennessee_Eastman_Reference_Data_for_Fault-Detection_and_Decision_Support_Systems/13385936",
+      "doi": "10.11583/DTU.13385936.v1",
+      "license": "CC0",
+      "verified": true,
+      "size": "132.96 GB full reference",
+      "notes": "28 process faults, 6 operating modes, 500 repeat simulations per fault, transitions/setpoint changes, 100 h simulations sampled every 3 min. Training 01 should stream/sample subsets rather than download all 133 GB immediately."
+    },
+    {
+      "id": "uci_hydraulic_447",
+      "modality": ["pressure", "flow", "temperature", "motor_power", "vibration"],
+      "priority": "P1",
+      "purpose": ["multisensor_condition_monitoring", "severity_transfer", "OOD_validation"],
+      "source": "https://archive.ics.uci.edu/dataset/447/condition+monitoring+of+hydraulic+systems",
+      "doi": "10.24432/C5CW21",
+      "license": "CC BY 4.0",
+      "verified": true,
+      "instances": 2205,
+      "notes": "Real physical test rig; four component conditions with severity grades."
+    },
+    {
+      "id": "industrial_maintenance_synthetic_2026",
+      "modality": ["text", "sensor_tag_metadata", "work_orders"],
+      "priority": "P0",
+      "purpose": ["operator_language_adaptation", "maintenance_RAG", "tool_selection_training", "data_quality_tests"],
+      "source": "https://huggingface.co/datasets/Jvachier/industrial-maintenance-synthetic",
+      "license": "Apache-2.0",
+      "verified": true,
+      "rows": 2097558,
+      "notes": "~1M sensor-tag records + ~1M work orders across 37 equipment types including belt conveyor, motor, gearbox and dosing pump; synthetic, therefore used for domain vocabulary/tool planning rather than as factual safety authority."
+    },
+    {
+      "id": "ibm_assetopsbench",
+      "modality": ["industrial_QA", "FMEA", "work_orders", "telemetry_scenarios", "agent_tool_trajectories"],
+      "priority": "P0",
+      "purpose": ["operator_agent_grounding", "guided_test_planning", "failure_mode_mapping", "tool_use_evaluation"],
+      "source": "https://github.com/IBM/AssetOpsBench",
+      "branch": "IndustryAssetEQA for FMEA/episodic QA experiments",
+      "license": "Apache-2.0 repository",
+      "verified": true,
+      "notes": "Industrial asset agent benchmark with IoT, failure-mode/sensor mapping, time-series forecasting/anomaly tools, work orders and vibration analysis. Use as architecture/evaluation corpus; retain FLOWTRUST-specific safety rules."
+    }
+  ],
+  "benchmark_only_or_pending_license": [
+    {
+      "id": "mvtec_ad2",
+      "reason": "Strong industrial anomaly benchmark but non-commercial CC BY-NC-SA terms; benchmark only."
+    },
+    {
+      "id": "real_iad",
+      "reason": "Large real industrial anomaly corpus but research/non-commercial terms; benchmark only."
+    },
+    {
+      "id": "ipad_industrial_video_anomaly",
+      "reason": "Highly relevant industrial video anomaly corpus, but dataset reuse terms must be verified before inclusion in training weights."
+    }
+  ]
+}

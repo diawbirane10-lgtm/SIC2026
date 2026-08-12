@@ -1,0 +1,141 @@
+{
+  "date": "2026-08-12",
+  "purpose": "Verified expansion pool discovered during targeted Training 01 research. Sources are promoted only when license and split provenance are clear.",
+  "sources": [
+    {
+      "id": "metropt3",
+      "priority": "P0-next",
+      "source": "UCI Machine Learning Repository dataset 791",
+      "doi": "10.24432/C5VW3R",
+      "license": "CC BY 4.0",
+      "scale": "1,516,948 rows; 15 features; ~208 MB CSV",
+      "modalities": ["pressure", "temperature", "motor_current", "valve_states", "time_series"],
+      "value": "Real operational metro compressor data for predictive maintenance, anomaly explanation and failure prediction. Useful closed transfer set for temporal/OOD branches."
+    },
+    {
+      "id": "belt_drive_vibration_2022",
+      "priority": "P1",
+      "source": "Mendeley Data",
+      "doi": "10.17632/jf8v2ndydr.1",
+      "license": "CC BY 4.0",
+      "scale": "459 experimental runs",
+      "modalities": ["vibration", "speed", "belt_pretension", "imbalance_condition"],
+      "value": "Healthy belt, faulty belt and imbalance across 17 speeds, 3 pretensions and repeated runs. Directly useful for belt/drive transfer."
+    },
+    {
+      "id": "rotating_machine_multimodal_kaist",
+      "priority": "P1",
+      "source": "Mendeley Data",
+      "doi": "10.17632/ztmf3m7h5x.4",
+      "license": "CC BY 4.0",
+      "scale": "~2.48 GB vibration + 1.44 GB current/temperature + 45 MB acoustic",
+      "modalities": ["vibration", "acoustic", "temperature", "motor_current", "load"],
+      "value": "Strong external test for multimodal electromechanical fusion and cross-sensor consistency."
+    },
+    {
+      "id": "bearing_variable_speed_part2",
+      "priority": "P1",
+      "source": "Mendeley Data",
+      "doi": "10.17632/x3vhp8t6hg.1",
+      "license": "CC BY 4.0",
+      "scale": "5.15 GB; 2,100 s runs; vibration 25.6 kHz, current 100 kHz",
+      "modalities": ["vibration", "motor_current", "rotational_speed"],
+      "value": "Normal, inner-race, outer-race and ball faults under randomly varying 680–2460 RPM; useful for variable-speed generalization."
+    },
+    {
+      "id": "upatras_rotating_2026",
+      "priority": "P2",
+      "source": "Mendeley Data",
+      "doi": "10.17632/42v3s74gf9.1",
+      "license": "CC BY 4.0",
+      "scale": "62.3 MB",
+      "modalities": ["vibration", "varying_speed"],
+      "value": "Recent incipient-fault dataset for early-fault sensitivity testing."
+    },
+    {
+      "id": "cdw_conveyor_detection",
+      "priority": "P0-vision-expansion",
+      "source": "Mendeley Data",
+      "doi": "10.17632/24d45pf8wm.2",
+      "license": "CC BY 4.0",
+      "scale": "550 RGB images, ~6,600 annotated concrete/brick/tile instances; 1920x1200",
+      "modalities": ["image", "bounding_box", "conveyor_scene"],
+      "value": "Full-scale sorting-platform conveyor with both sparse and heavily stacked material tests; useful for conveyor/material scene diversity and occlusion robustness."
+    },
+    {
+      "id": "rock_transport_conveyor_2026",
+      "priority": "P0-vision-expansion",
+      "source": "Mendeley Data",
+      "doi": "10.17632/v9grvgsrh9.1",
+      "license": "CC BY 4.0",
+      "scale": "transport subset 69 MB plus larger mining-stage subsets",
+      "modalities": ["image", "instance_segmentation", "conveyor_transport"],
+      "value": "Transport subset uses a Dalsa industrial camera facing a 400 mm conveyor with manual segmentation; adds rock/material appearance and geometry diversity."
+    },
+    {
+      "id": "deepsort_3c_conveyor_2026",
+      "priority": "P2-vision-diversity",
+      "source": "Mendeley Data",
+      "doi": "10.17632/gzmtph8zs2.1",
+      "license": "CC BY 4.0",
+      "scale": "138 background-removed object images",
+      "modalities": ["image", "object_class"],
+      "value": "Small but permissively licensed source of visually diverse objects intended for smart-conveyor sorting; useful only as auxiliary object diversity, not conveyor context."
+    },
+    {
+      "id": "cocoa_conveyor_qcv",
+      "priority": "P2-vision-diversity",
+      "source": "Mendeley Data",
+      "doi": "10.17632/sr279sf4hs.1",
+      "license": "CC BY 4.0",
+      "modalities": ["video_frame", "conveyor_scene", "quality_classification"],
+      "value": "Conveyor-based video capture of cocoa beans; useful as additional moving-material texture/domain diversity."
+    },
+    {
+      "id": "bok_choy_conveyor_2026",
+      "priority": "P2-vision-diversity",
+      "source": "Mendeley Data",
+      "doi": "10.17632/84z7hs67fm.1",
+      "license": "CC BY 4.0",
+      "scale": "575 images, 909 annotated instances",
+      "modalities": ["image", "bounding_box", "instance_segmentation", "conveyor_sorting"],
+      "value": "Conveyor robotic-sorting environment with instance masks and orientation labels; useful for segmentation robustness, not AFR-specific semantics."
+    },
+    {
+      "id": "toyadmos_conveyor_audio",
+      "priority": "P0-audio-expansion",
+      "source": "YumaKoizumi/ToyADMOS-dataset + Zenodo 3351307",
+      "license": "DATASET_LICENSE_PDF_MUST_BE_REVIEWED_BEFORE_TRAINING_WEIGHT_REDISTRIBUTION",
+      "scale": "~540 h normal operating sound + >12,000 anomalous samples; full corpus >440 GB, compressed ~180 GB",
+      "modalities": ["multi_microphone_audio", "toy_conveyor_fault_audio"],
+      "value": "One of the largest machine-sound anomaly corpora and explicitly includes a fixed toy-conveyor fault-diagnosis task. Stream only the conveyor subset after license review."
+    },
+    {
+      "id": "imad_ds",
+      "priority": "P1-multimodal-validation",
+      "source": "Zenodo DOI 10.5281/zenodo.12636236 + augustif/IMAD-DS_baseline",
+      "license": "VERIFY_DATASET_RECORD_BEFORE_TRAINING",
+      "modalities": ["microphone_16khz", "accelerometer_6.7khz", "gyroscope_6.7khz"],
+      "value": "Two scaled industrial machines with source/target domains and domain shift; useful for multimodal robustness and target-domain generalization tests."
+    },
+    {
+      "id": "steelds_conveyor_2026",
+      "priority": "candidate-license-review",
+      "source": "Zenodo record 20271102",
+      "doi": "10.5281/zenodo.20271102",
+      "license": "NO_LICENSE_TEXT_EXPOSED_ON_RECORD_AT_REVIEW_TIME",
+      "scale": "67.6 GB high-resolution video/images",
+      "modalities": ["video", "image", "instance_segmentation", "tracking", "material_classification"],
+      "value": "High-resolution steel/copper scrap under simulated industrial conveyor conditions; potentially excellent visual transfer set, but blocked until explicit reuse terms are confirmed."
+    },
+    {
+      "id": "construction_demolition_waste_conveyor_zenodo",
+      "priority": "candidate-license-review",
+      "source": "Zenodo record 17447590",
+      "license": "VERIFY_BEFORE_USE",
+      "scale": "1,630 high-resolution moving-conveyor images",
+      "modalities": ["image", "object_detection", "tracking"],
+      "value": "Five material classes under real conveyor motion; relevant scene diversity if licensing is confirmed."
+    }
+  ]
+}

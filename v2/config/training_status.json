@@ -1,0 +1,30 @@
+{
+  "run_id": "FLOWTRUST-V2-T01-20260812",
+  "date": "2026-08-12",
+  "last_updated": "2026-08-12T18:27:00+01:00",
+  "phase": "data_model_preflight_complete_gpu_training_pending",
+  "completed": [
+    "targeted web and GitHub source discovery",
+    "official foundation-model repository verification",
+    "dataset provenance and license registry",
+    "large-scale inherited-pretraining registry",
+    "anti-leak train/validation/test policy",
+    "experiment matrix T01-A through T01-E",
+    "acceptance gates before HMI integration",
+    "local runtime GPU preflight"
+  ],
+  "local_runtime": {
+    "python": "3.13.5",
+    "torch": "2.10.0+cpu",
+    "cuda_available": false,
+    "gpu_count": 0
+  },
+  "gpu_runs": {
+    "T01-A_vision_scene_gate": "queued_not_executed",
+    "T01-B_vision_anomaly_segmentation": "queued_not_executed",
+    "T01-C_conveyor_audio_vibration": "queued_not_executed",
+    "T01-D_motor_process_chronos": "queued_not_executed",
+    "T01-E_operator_copilot": "queued_not_executed"
+  },
+  "claim_policy": "No checkpoint, metric, fine-tuning result or improved accuracy is to be claimed until an actual GPU run produces the corresponding artifact and closed-test report."
+}
