@@ -20,6 +20,11 @@
   <button class="tab" data-view="validation">Validation MVP</button>
 </nav>
 
+<div class="alarm-banner" id="alarmBanner" role="alert" aria-live="assertive">
+  <div><span class="alarm-icon">!</span><div><b id="alarmTitle">ALARME</b><span id="alarmMessage">Défaut critique détecté</span></div></div>
+  <div class="alarm-actions"><button id="muteAlarmBtn">Couper buzzer</button><button id="ackAlarmBtn">Acquitter</button></div>
+</div>
+
 <main>
   <section class="view active" id="view-supervision">
     <div class="notice"><b>Démo temps réel.</b> Les variables procédé sont synthétiques. La caméra de ton appareil peut être utilisée en direct pour tester la branche vision, avec autorisation explicite du navigateur.</div>
@@ -64,7 +69,7 @@
         <p class="privacy-note">Traitement CV de démonstration effectué localement dans le navigateur. Aucune image n'est envoyée au backend dans cette version.</p>
       </section>
 
-      <section class="panel diagnosis-panel">
+      <section class="panel diagnosis-panel" id="diagnosisPanel">
         <div class="panel-head"><div><small>FLOWTRUST AI</small><h2>Diagnostic courant</h2></div><span class="pill" id="confidencePill">--</span></div>
         <div class="diagnosis-state" id="diagnosisState"></div>
         <div class="source-health" id="sourceHealth"></div>
@@ -95,6 +100,14 @@
       <button class="test-card" data-test="observability"><span>05</span><b>Tester l'observabilité</b><p>Vérifie si assez de sources fiables sont disponibles pour conclure.</p></button>
       <button class="test-card" data-test="incident"><span>06</span><b>Injecter un scénario de démo</b><p>Déclenche une anomalie synthétique pour observer la réaction du moteur.</p></button>
     </div>
+
+    <section class="panel fault-lab">
+      <div class="panel-head"><div><small>FAULT INJECTION LAB</small><h2>Injecter un défaut et observer la réaction</h2></div><span class="tag">DÉMO SYNTHÉTIQUE</span></div>
+      <p class="fault-intro">Chaque injection modifie progressivement les variables simulées. Les défauts critiques déclenchent un bandeau rouge, un flash visuel, un journal d'événement et un buzzer audible jusqu'à acquittement ou coupure du son.</p>
+      <div class="fault-grid" id="faultGrid"></div>
+      <div class="fault-controls"><button id="restoreNominalBtn">↺ Retour nominal</button><label><input type="checkbox" id="audioAlarmToggle" checked /> Buzzer audible</label></div>
+    </section>
+
     <section class="panel test-result-panel">
       <div class="panel-head"><div><small>RÉSULTAT DU TEST</small><h2 id="testResultTitle">Sélectionnez un test</h2></div><span class="tag" id="testResultStatus">EN ATTENTE</span></div>
       <div id="testResultBody" class="test-result-body"><p>Les résultats, explications et suggestions apparaîtront ici.</p></div>
