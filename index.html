@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FlowTrust AFR — SIC2026</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark">FT</span><div><b>FlowTrust AFR</b><small>SIC2026 · surveillance multimodale en lecture seule</small></div></div>
+  <div class="status"><span class="dot"></span> Démo synthétique · Edge/Offline ready</div>
+</header>
+<main>
+<section class="hero">
+  <div>
+    <div class="eyebrow">Cimenterie · AFR feed-chain intelligence</div>
+    <h1>Détecter les dérives d’alimentation avant qu’elles ne deviennent des incidents procédé.</h1>
+    <p>Fusion des signaux procédé, électriques et visuels. FlowTrust n’envoie aucune commande au procédé : il explique, alerte et recommande une vérification à l’opérateur.</p>
+  </div>
+  <div class="hero-card"><div class="kpi"><span>Mode</span><b>READ ONLY</b></div><div class="kpi"><span>Décision</span><b>OPÉRATEUR</b></div><div class="kpi"><span>Données</span><b>SYNTHÉTIQUES</b></div></div>
+</section>
+<section class="grid-2">
+  <div class="panel control-panel">
+    <div class="panel-title"><div><small>SCÉNARIO</small><h2>Replay de démonstration</h2></div><span id="clock"></span></div>
+    <div class="scenario-buttons" id="scenarioButtons"></div>
+    <div class="stream" id="stream"></div>
+  </div>
+  <div class="panel diagnosis-panel">
+    <div class="panel-title"><div><small>FUSION IA</small><h2>Diagnostic courant</h2></div><span class="pill" id="confidencePill">—</span></div>
+    <div class="diagnosis" id="diagnosis"></div>
+    <div class="evidence"><h3>Éléments de preuve</h3><ul id="evidenceList"></ul></div>
+    <div class="recommendation" id="recommendation"></div>
+  </div>
+</section>
+<section class="grid-3">
+  <div class="panel mini"><small>Robustesse temporelle</small><h3>Hampel + Theil–Sen + CUSUM</h3><p>Filtrage robuste, tendance et rupture sans dépendre d’un unique échantillon.</p></div>
+  <div class="panel mini"><small>Signature électrique</small><h3>Welch + corrélation croisée</h3><p>Évalue cohérence charge–débit et indices de glissement/entraînement.</p></div>
+  <div class="panel mini"><small>Confiance</small><h3>Abstention OOD</h3><p>Si la qualité caméra ou la cohérence des variables sort du domaine, FlowTrust refuse de conclure.</p></div>
+</section>
+<section class="panel architecture">
+  <div><small>ARCHITECTURE PILOTE</small><h2>Du site industriel à l’aide à la décision</h2></div>
+  <div class="flow">
+    <div class="node"><b>SCADA / OPC UA</b><span>P, I, vitesse, débit, alarmes</span></div><div class="arrow">→</div>
+    <div class="node"><b>Caméra PoE</b><span>zone transfert AFR</span></div><div class="arrow">→</div>
+    <div class="node accent"><b>FlowTrust Edge</b><span>fusion + diagnostic + confiance</span></div><div class="arrow">→</div>
+    <div class="node"><b>Écran opérateur</b><span>preuve + recommandation</span></div>
+  </div>
+  <p class="footnote">Pilote conseillé : connexion en lecture seule, shadow mode puis mode conseil. Aucune écriture SCADA dans le MVP.</p>
+</section>
+</main>
+<footer>FlowTrust AFR · Prototype SIC2026 · Démonstration synthétique reproductible · pas de mesure SOCOCIM réelle</footer>
+<script src="app.js"></script>
+</body>
+</html>
