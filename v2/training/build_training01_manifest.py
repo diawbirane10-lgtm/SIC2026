@@ -47,6 +47,10 @@ def main():
         },
         "experiments": [],
         "blocked_sources": [],
+        "bootstrap_notes": {
+            "T01-A0": "CoalAD conveyor frames plus COCO hard negatives; bootstrap only, not final industrial validation.",
+            "T01-F0": "Real UCI hydraulic sensor cycles with controlled synthetic sensor-integrity corruptions; group split by physical cycle."
+        }
     }
 
     blocked = {}
