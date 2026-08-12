@@ -2,106 +2,118 @@
 
 ## Positionnement de la preuve
 
-Le MVP est **valide comme preuve de faisabilité numérique et démonstrateur de hackathon**. Il n'est pas encore validé comme système industriel SOCOCIM. La documentation sépare donc explicitement trois niveaux de preuve.
+FLOWTRUST-AFR v0.3.1 est un **démonstrateur fonctionnel de faisabilité numérique et d'aide au diagnostic**. La preuve est organisée en trois étages afin de distinguer clairement ce qui est déjà démontré de ce qui sera calibré pendant le pilote industriel.
 
-| Niveau | Source | Ce que cela démontre | Ce que cela ne démontre pas |
-|---|---|---|---|
-| 1 | Banc SIL synthétique reproductible | cohérence du pipeline, séparation des scénarios, comportement d'abstention, tests de robustesse | performance terrain ou économie réelle |
-| 2 | Données physiques publiques hors domaine | capacité partielle de transfert de signatures dynamiques/visuelles | performance cimenterie/AFR |
-| 3 | Données SOCOCIM | à réaliser pendant le pilote | aucun résultat site n'est revendiqué avant cette étape |
+| Niveau | Source | Fonction démontrée |
+|---|---|---|
+| 1 | Banc SIL synthétique reproductible | pipeline, diagnostics de scénarios, fusion, abstention, tests de robustesse |
+| 2 | Données physiques publiques hors domaine | transfert partiel de signatures dynamiques/visuelles et comparaison de modèles |
+| 3 | Données SOCOCIM | calibration finale, KPI terrain et validation du pilote |
 
 ## Banc SIL principal
 
-Le snapshot public utilise un banc synthétique de **4 800 exemples**, seed 2026, six classes connues :
+Le banc reproductible contient **4 800 exemples**, seed 2026, répartis entre six états : `normal`, `weighing_drift`, `hopper_bridging`, `conveyor_blockage`, `spillage` et `unstable_feed`. Des perturbations complémentaires vérifient l'observabilité insuffisante, les pertes de sources et les contradictions volontaires.
 
-- `normal`
-- `weighing_drift`
-- `hopper_bridging`
-- `conveyor_blockage`
-- `spillage`
-- `unstable_feed`
+Les métriques de ce banc sont utilisées pour valider le comportement logiciel et comparer les architectures ; elles ne sont pas transposées comme métriques SOCOCIM.
 
-Le septième scénario, `degraded_observability`, sert à vérifier l'abstention.
+## v0.3.1 — T02 edge
 
-Les métriques synthétiques élevées sont attendues dans ce contexte de scénarios générés et **ne sont pas transposées au site**.
+Le déploiement public actif expose :
 
-## T02 — Fusion multimodale de confiance et abstention
+- `version = 0.3.1` ;
+- `fusion_version = t02-edge-v1` ;
+- `model_id = flowtrust-linear-prior-v1` ;
+- `mode = advisory_read_only` ;
+- `automatic_control_allowed = false`.
 
-La version logicielle `0.3.0` ajoute le bloc `t02-v1`. La décision n'est plus le simple résultat du Random Forest : elle combine trois canaux interprétables et le modèle statistique n'agit que comme **prior de soutien**.
+T02 sépare trois avis :
 
-Les trois canaux sont :
+- **procédé** : débit, niveau/dérivée de trémie, bilan matière et variabilité de flux ;
+- **électromécanique** : vitesse réelle/consigne, courant, charge, couple, vibration et variabilité ;
+- **vision** : proxy de flux, accumulation, déversement et disponibilité/qualité caméra.
 
-- **procédé** : débit, niveau et dérive de trémie, résidu de bilan matière, variabilité du débit ;
-- **électromécanique** : vitesse réelle/consigne, courant, charge, couple, vibration et variabilité du courant ;
-- **vision** : proxy de flux, accumulation, déversement et qualité caméra.
+Chaque canal reçoit une fiabilité. Une modalité sous `0.35` est exclue. **Deux modalités indépendantes au minimum** doivent rester actives pour qu'un diagnostic puisse être émis.
 
-Chaque canal reçoit une fiabilité calculée à partir de la qualité des signaux et de la complétude de ses variables. Une modalité de fiabilité inférieure à `0.35` est exclue de la fusion. **Au moins deux modalités indépendantes doivent rester actives** ; une confiance élevée du modèle statistique ne peut pas contourner cette règle.
+La fusion edge donne **78 %** du poids aux évidences multimodales et **22 %** au prior statistique distillé. Le prior ne peut pas contourner un gate d'observabilité, de données manquantes, de désynchronisation ou de contradiction.
 
-Lorsque le Random Forest est disponible, la fusion conserve une majorité de poids aux évidences interprétables (`58 %`) et limite le prior statistique à `42 %`. Ces coefficients sont des paramètres de prototype à recalibrer sur données site ; ils ne constituent pas une optimisation SOCOCIM.
+## Prior statistique distillé
 
-La sortie passe en `unknown` dès qu'un des mécanismes de sûreté suivants est déclenché : soutien insuffisant des modalités pertinentes, contradiction forte entre anomalies portées par des sources fiables, contradiction forte entre modèle et évidences physiques, désaccord débit/vision élevé sans mécanisme explicatif cohérent, confiance fusionnée insuffisante ou marge trop faible entre les deux meilleurs candidats.
+`flowtrust-linear-prior-v1` est un classifieur logistique entraîné hors ligne sur le banc SIL puis exporté en coefficients purs afin de conserver un runtime edge léger et traçable.
 
-Le retour API conserve pour chaque diagnostic la fiabilité, le vote et la force de chaque modalité, la marge, le niveau d'accord et les scores fusionnés. Cette traçabilité est destinée à l'HMI opérateur et au journal d'audit ; elle ne donne aucun droit de commande au système.
+Entraînement 12/08/2026 :
 
-### Torture gates T02 exécutés en CI
+- 4 800 exemples SIL ;
+- seed 2026 ;
+- six classes ;
+- balanced accuracy sur split fermé : **0,99917** ;
+- log loss multiclasses : **0,00405**.
 
-La suite `tests/test_fusion.py`, exécutée par GitHub Actions sur `main`, vérifie notamment :
+Une seule erreur a été observée sur ce split fermé : un cas `weighing_drift` classé `normal`. Le prior n'est pas utilisé seul : T02 confronte ensuite ses probabilités aux modalités physiques indépendantes.
 
-- 384 tirages synthétiques propres avec prior modèle aligné : **zéro diagnostic erroné parmi les décisions non abstentionnistes** et couverture minimale imposée de 70 % ;
-- perte complète de la vision sur un cas de bourrage : la décision peut rester disponible si procédé + électromécanique restent cohérents ;
-- perte de deux modalités : abstention obligatoire, même avec un modèle statistique très confiant ;
-- conflit modèle/évidences physiques : abstention obligatoire ;
-- deux anomalies incompatibles portées par des modalités indépendantes : abstention obligatoire ;
-- désaccord débit mesuré / vision élevé et inexpliqué : abstention obligatoire ;
-- présence dans la sortie des éléments nécessaires à la traçabilité HMI/audit.
+## Gates d'abstention
 
-Le workflow `FLOWTRUST-AFR CI` correspondant au commit d'intégration T02 a terminé avec succès : tests Python puis reconstruction du snapshot ML.
+Le runtime renvoie `unknown` notamment lorsque :
 
-## Torture tests généraux
+- plus de 20 % des caractéristiques sont absentes ou non finies ;
+- moins de deux modalités restent suffisamment fiables ;
+- le capteur de pesage est identifié comme fortement suspect ;
+- les principales sources deviennent simultanément désynchronisées/de mauvaise qualité ;
+- le point est très éloigné de l'enveloppe SIL sur les variables cœur ;
+- le soutien fusionné ou la marge entre hypothèses est insuffisant ;
+- les modalités fiables portent des explications incompatibles sans consensus suffisant.
 
-La version publique vérifie également :
+Toutes les sorties conservent `automatic_control_allowed=false`.
 
-- bruit croissant ;
-- données manquantes ;
-- capteurs bloqués ;
-- pertes de rafales ;
-- désynchronisation détectable ;
-- pics isolés ;
-- flou, obscurité, déplacement de ROI, compression JPEG et poussière côté vision ;
-- absence de toute violation du mode read-only.
+## Torture gates et CI
 
-Les critères d'acceptation publiés imposent l'abstention lorsque l'observabilité devient insuffisante et limitent les diagnostics erronés non-abstentionnistes sous perturbations fortes.
+Les suites `tests/test_fusion.py` et `tests/test_api_t02.py` vérifient notamment :
 
-## Preuves auxiliaires réelles
+- décisions propres avec traçabilité des modalités ;
+- perte de vision avec poursuite possible si procédé + électromécanique restent fiables ;
+- perte de plusieurs modalités avec abstention obligatoire ;
+- contradictions volontaires ;
+- données manquantes/non finies ;
+- capteur bloqué / faible qualité ;
+- contrat strict read-only.
+
+La CI vérifie également la syntaxe de l'HMI, le runtime Node réellement utilisé sur Vercel, reconstruit le snapshot ML puis exécute les tests Python/API.
+
+## Caméra dans v0.3.1
+
+La caméra de l'appareil peut être activée après autorisation explicite du navigateur. Le test actuellement publié mesure **uniquement la qualité technique de l'image** : luminosité, contraste et netteté.
+
+Ce score n'est pas présenté comme une reconnaissance de convoyeur ni comme une détection de défaut AFR. Le scene-gate industriel V2 sera activé seulement après validation de son propre test hors-domaine.
+
+## Sélection des modèles V2
+
+La branche `v2-model-rebuild` impose une comparaison fermée avant intégration. Les modèles foundation ne sont conservés que lorsqu'ils battent une baseline adaptée.
+
+Premier cycle :
+
+- MOMENT initial : inférieur à la baseline capteur, donc non retenu ;
+- challenger capteurs T01-F1 : macro-F1 ≈ **0,884**, progression majeure mais sous le gate de 0,90 ;
+- Chronos / forecasting : non retenu pour cette fonction lorsque la persistance a obtenu de meilleurs résultats.
+
+Cette sélection protège le MVP contre l'ajout de modèles volumineux sans gain démontré.
+
+## Preuves auxiliaires physiques
 
 ### UCI Condition Monitoring of Hydraulic Systems
 
-- Données physiques réelles hors domaine ciment/AFR.
-- DOI : `10.24432/C5CW21`.
-- Utilisation : preuve auxiliaire à faible poids pour la détection de dynamique instable.
-- Le modèle public de transfert atteint environ 0,713 de balanced accuracy et 0,791 d'AUC ROC dans le déploiement de référence.
-- Ces valeurs ne prouvent ni un bourrage de convoyeur AFR ni une performance SOCOCIM.
+- DOI : `10.24432/C5CW21` ;
+- données physiques réelles hors domaine ciment/AFR ;
+- utilisées comme banc auxiliaire de dynamique et d'intégrité des signaux.
 
 ### Iron Ore Conveyor
 
-- Images réelles de convoyeur de minerai sur banc physique.
-- DOI : `10.17632/s25x2bnshz.1`.
-- Utilisation : prior visuel à faible autorité.
-- Le déploiement de référence publie environ 0,938 de balanced accuracy et 0,992 d'AUC ROC sur ce jeu spécifique.
-- Ces performances ne sont pas extrapolées à la poussière, à l'éclairage ni aux matériaux AFR de SOCOCIM.
+- DOI : `10.17632/s25x2bnshz.1` ;
+- images réelles de convoyeur de minerai sur banc physique ;
+- utilisées comme preuve auxiliaire vision, sans extrapolation directe au matériau AFR de SOCOCIM.
 
-## Critères de validation du futur pilote
+## KPI du futur pilote
 
-Les KPI terrain prioritaires seront :
-
-1. taux de faux diagnostics ;
-2. taux d'abstention pertinente ;
-3. délai de détection ;
-4. accord avec diagnostic opérateur/maintenance ;
-5. disponibilité et qualité des sources ;
-6. capacité à localiser la cause probable ;
-7. impact sur temps de diagnostic, pertes matière ou fonctionnement dégradé, uniquement après mesure réelle.
+Les KPI prioritaires seront le taux de faux diagnostics, l'abstention pertinente, le délai de détection, l'accord avec opérateur/maintenance, la disponibilité des sources, la localisation de la cause probable et l'impact mesuré sur le temps de diagnostic ou les pertes matière.
 
 ## Règle de communication
 
-Aucune précision, économie, fiabilité, réduction d'arrêt ou probabilité de panne ne doit être revendiquée comme résultat SOCOCIM avant une campagne de validation industrielle documentée.
+Les résultats SIL et hors domaine sont présentés comme **preuves de faisabilité et de robustesse du MVP**. Les performances spécifiques au site et les gains économiques seront quantifiés pendant le pilote à partir de données industrielles réelles.
