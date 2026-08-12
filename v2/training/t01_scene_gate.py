@@ -44,6 +44,8 @@ def load_manifest(path: Path):
     bad = sorted(set(df.label) - VALID_LABELS)
     if bad:
         raise ValueError(f"Unsupported labels: {bad}")
+    if df.label.nunique() < 2:
+        raise ValueError("Scene-gate training needs at least two labels.")
     for p in df.image_path:
         if not Path(p).exists():
             raise FileNotFoundError(p)
@@ -53,13 +55,17 @@ def load_manifest(path: Path):
 def extract_embeddings(df, model_id, batch_size, device, cache_path):
     if cache_path.exists():
         cache = np.load(cache_path, allow_pickle=False)
-        if list(cache["image_path"]) == list(df.image_path.astype(str)):
+        same_model = "model_id" in cache and str(cache["model_id"].item()) == model_id
+        same_paths = list(cache["image_path"]) == list(df.image_path.astype(str))
+        if same_model and same_paths:
             print(f"Using cached embeddings: {cache_path}")
-            return cache["embeddings"]
+            return cache["embeddings"], int(cache["model_parameters"].item())
 
     processor = AutoImageProcessor.from_pretrained(model_id)
     dtype = torch.bfloat16 if device.startswith("cuda") and torch.cuda.is_bf16_supported() else torch.float32
     model = AutoModel.from_pretrained(model_id, torch_dtype=dtype).to(device).eval()
+    model_parameters = int(sum(p.numel() for p in model.parameters()))
+    print(f"Loaded {model_id}: {model_parameters:,} parameters")
 
     chunks = []
     with torch.inference_mode():
@@ -69,14 +75,23 @@ def extract_embeddings(df, model_id, batch_size, device, cache_path):
             inputs = processor(images=images, return_tensors="pt")
             inputs = {k: v.to(device) for k, v in inputs.items()}
             outputs = model(**inputs)
-            emb = outputs.pooler_output.float().cpu().numpy()
-            chunks.append(emb)
+            if getattr(outputs, "pooler_output", None) is not None:
+                emb = outputs.pooler_output
+            else:
+                emb = outputs.last_hidden_state.mean(dim=1)
+            chunks.append(emb.float().cpu().numpy())
             print(f"embedded {min(start + batch_size, len(df))}/{len(df)}")
 
     embeddings = np.concatenate(chunks, axis=0)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(cache_path, embeddings=embeddings, image_path=df.image_path.astype(str).to_numpy())
-    return embeddings
+    np.savez_compressed(
+        cache_path,
+        embeddings=embeddings,
+        image_path=df.image_path.astype(str).to_numpy(),
+        model_id=np.asarray(model_id),
+        model_parameters=np.asarray(model_parameters, dtype=np.int64),
+    )
+    return embeddings, model_parameters
 
 
 def split_groups(df, seed):
@@ -106,25 +121,24 @@ def main():
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device != "cuda":
-        raise RuntimeError("T01-A requires a CUDA GPU for the selected 300M DINOv3 ViT-L backbone.")
+        raise RuntimeError("T01-A requires a CUDA GPU for the selected large vision backbone.")
 
     df = load_manifest(args.manifest).reset_index(drop=True)
     args.outdir.mkdir(parents=True, exist_ok=True)
-    embeddings = extract_embeddings(df, args.model, args.batch_size, device, args.outdir / "embeddings.npz")
+    embeddings, model_parameters = extract_embeddings(
+        df, args.model, args.batch_size, device, args.outdir / "embeddings.npz"
+    )
 
     le = LabelEncoder().fit(df.label)
     y = le.transform(df.label)
     tr, va, te = split_groups(df, args.seed)
 
-    # Fit a compact head on frozen 300M foundation embeddings.
     base = Pipeline([
         ("scale", StandardScaler()),
         ("clf", LogisticRegression(max_iter=2500, class_weight="balanced", C=1.0, random_state=args.seed)),
     ])
     base.fit(embeddings[tr], y[tr])
 
-    # Calibration uses a group-disjoint validation set. FrozenEstimator prevents
-    # accidental refitting of the classifier on calibration data.
     calibrated = CalibratedClassifierCV(estimator=FrozenEstimator(base), method="sigmoid")
     calibrated.fit(embeddings[va], y[va])
 
@@ -136,7 +150,7 @@ def main():
     report = {
         "run_id": "FLOWTRUST-V2-T01-A-20260812",
         "model": args.model,
-        "backbone_parameters": 300_000_000,
+        "backbone_parameters": model_parameters,
         "head": "logistic_regression_on_frozen_embeddings",
         "calibration": "sigmoid_on_group_disjoint_validation",
         "counts": {"train": int(len(tr)), "validation": int(len(va)), "test": int(len(te))},
@@ -153,12 +167,23 @@ def main():
         "classification_report": classification_report(true_names, pred_names, output_dict=True, zero_division=0),
         "gate": "false_conveyor_accept_rate <= 0.02",
     }
-    report["gate_passed"] = report["false_conveyor_accept_rate"] is not None and report["false_conveyor_accept_rate"] <= 0.02
+    report["gate_passed"] = (
+        report["false_conveyor_accept_rate"] is not None
+        and report["false_conveyor_accept_rate"] <= 0.02
+    )
 
-    joblib.dump({"classifier": calibrated, "label_encoder": le, "model_id": args.model}, args.outdir / "scene_gate_head.joblib")
+    joblib.dump(
+        {"classifier": calibrated, "label_encoder": le, "model_id": args.model, "model_parameters": model_parameters},
+        args.outdir / "scene_gate_head.joblib",
+    )
     (args.outdir / "metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    df.iloc[te].assign(prediction=pred_names, confidence=proba.max(1)).to_csv(args.outdir / "closed_test_predictions.csv", index=False)
-    print(json.dumps({k: report[k] for k in ["macro_f1", "ece", "false_conveyor_accept_rate", "gate_passed"]}, indent=2))
+    df.iloc[te].assign(prediction=pred_names, confidence=proba.max(1)).to_csv(
+        args.outdir / "closed_test_predictions.csv", index=False
+    )
+    print(json.dumps(
+        {k: report[k] for k in ["model", "backbone_parameters", "macro_f1", "ece", "false_conveyor_accept_rate", "gate_passed"]},
+        indent=2
+    ))
 
 
 if __name__ == "__main__":
