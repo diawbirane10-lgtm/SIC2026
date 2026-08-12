@@ -7,7 +7,9 @@
 **Application :** https://flowtrust-afr-sic2026.vercel.app  
 **API santé :** https://flowtrust-afr-sic2026.vercel.app/api/health
 
-État vérifié du déploiement public : `version 0.2.0`, `advisory_read_only`, `automatic_control_allowed=false`, modèle principal `afr-rf-diagnostic-v1`.
+État vérifié du déploiement public au 12 août 2026 : `version 0.2.0`, `advisory_read_only`, `automatic_control_allowed=false`, modèle principal `afr-rf-diagnostic-v1`.
+
+La branche `main` contient désormais le cœur **v0.3.0 / T02** avec fusion multimodale de confiance et abstention renforcée. Cette logique a passé la CI mais n'est pas encore revendiquée comme version servie par l'URL publique tant qu'un nouveau déploiement Vercel n'a pas été vérifié.
 
 ## Documentation rapide
 
@@ -43,7 +45,15 @@ Le replay public contient sept situations :
 6. alimentation instable ;
 7. observabilité insuffisante, avec abstention obligatoire.
 
-## Modèles actifs dans le déploiement v0.2.0
+## T02 — Fusion de confiance
+
+Le module `fusion_trust.py` sépare trois avis interprétables : **procédé**, **électromécanique** et **vision**. Chaque canal est pondéré par sa qualité et sa complétude. Une modalité peu fiable est exclue et moins de deux modalités actives entraîne obligatoirement `unknown`.
+
+Lorsque le Random Forest est disponible, son vecteur de probabilités sert uniquement de prior de soutien. Dans le prototype T02, les évidences multimodales conservent 58 % du poids et le prior statistique 42 %. Le système s'abstient aussi en cas de conflit fort modèle/physique, de diagnostics anormaux contradictoires, de désaccord débit/vision inexpliqué, de confiance trop faible ou de marge insuffisante.
+
+Les tests T02 couvrent notamment la perte d'une modalité, la perte de deux modalités, les contradictions volontaires, le désaccord mesure/vision et la traçabilité détaillée de la décision. Le workflow GitHub Actions a validé la suite puis reconstruit le snapshot ML avec succès.
+
+## Modèles actifs dans le déploiement public v0.2.0
 
 - `afr-physics-rules-v1` — règles de cohérence physique ;
 - `afr-rf-diagnostic-v1` — classifieur diagnostic ;
@@ -56,7 +66,7 @@ Deux adaptateurs vision restent volontairement non activés dans le MVP (`segfor
 
 ## Validation et limites
 
-Le modèle diagnostic principal a été évalué sur un banc **SIL synthétique** de 4 800 exemples, seed 2026, six classes. Le déploiement expose les métriques et les tests de torture via :
+Le modèle diagnostic principal a été évalué sur un banc **SIL synthétique** de 4 800 exemples, seed 2026, six classes. Le déploiement public v0.2.0 expose les métriques et les tests de torture via :
 
 - `/api/models`
 - `/api/validation`
@@ -72,13 +82,15 @@ Les tests de robustesse du MVP vérifient notamment le bruit, les données manqu
 Le dépôt contient une reconstruction publique et auditable du cœur SIL :
 
 - `flowtrust_core.py` — générateur synthétique, règles physiques, contrôle d'observabilité ;
+- `fusion_trust.py` — T02, fusion procédé/électromécanique/vision, pondération par confiance et abstention ;
 - `train_models.py` — entraînement déterministe Random Forest + Isolation Forest ;
-- `api/main.py` — endpoint FastAPI de diagnostic en mode conseil ;
+- `api/main.py` — endpoint FastAPI de diagnostic v0.3.0 en mode conseil, routé par T02 ;
 - `index.html`, `styles.css`, `app.js` — miroir web léger pour lecture du concept ;
 - `tests/test_core.py` — tests de reproductibilité, observabilité et règles de sûreté ;
+- `tests/test_fusion.py` — torture gates T02 ;
 - `.github/workflows/ci.yml` — CI de test et reconstruction du snapshot ML.
 
-Le déploiement Vercel v0.2.0 reste la démonstration de référence. Le snapshot GitHub rend la logique scientifique principale lisible et reproductible sans publier de données industrielles propriétaires.
+Le déploiement Vercel v0.2.0 reste la démonstration publique de référence jusqu'au prochain déploiement vérifié. Le snapshot GitHub rend la logique scientifique principale lisible et reproductible sans publier de données industrielles propriétaires.
 
 ## Reproduire le cœur ML
 
