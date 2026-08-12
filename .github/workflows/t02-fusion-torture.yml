@@ -1,0 +1,67 @@
+name: FLOWTRUST T02 fusion torture
+
+on:
+  push:
+    branches: [v2-model-rebuild]
+    paths:
+      - '.github/workflows/t02-fusion-torture.yml'
+      - 'v2/fusion/**'
+      - 'v2/training/t02_fusion_torture.py'
+      - 'flowtrust_core.py'
+  workflow_dispatch:
+
+jobs:
+  fusion-torture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout V2 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'numpy>=2,<3' 'scikit-learn>=1.6,<1.8'
+
+      - name: Run deterministic fusion unit tests
+        run: |
+          pip install pytest
+          python -m pytest -q tests/test_fusion_arbiter.py
+
+      - name: Run T02 closed SIL torture benchmark
+        run: |
+          mkdir -p artifacts/t02
+          /usr/bin/time -v python v2/training/t02_fusion_torture.py \
+            --outdir artifacts/t02 \
+            --samples-per-class 500 \
+            --seed 2026 \
+            2>&1 | tee artifacts/t02/run.log
+
+      - name: Record provenance
+        if: always()
+        run: |
+          mkdir -p artifacts/t02
+          python -m pip freeze > artifacts/t02/pip_freeze.txt
+          printf 'github_sha=%s\n' "$GITHUB_SHA" > artifacts/t02/runtime.txt
+          if [ -f artifacts/t02/metrics.json ]; then cat artifacts/t02/metrics.json; fi
+
+      - name: Upload T02 evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOWTRUST_T02_${{ github.sha }}
+          path: |
+            artifacts/t02/metrics.json
+            artifacts/t02/run.log
+            artifacts/t02/runtime.txt
+            artifacts/t02/pip_freeze.txt
+          if-no-files-found: warn
+          retention-days: 14
