@@ -1,15 +1,15 @@
 {
-  "registry_version": "2026-08-12.training-01",
+  "registry_version": "2026-08-12.training-01-r2",
   "principle": "Use large pretrained foundations where scale improves representation; keep safety/fusion gates small, calibrated and auditable rather than inflating parameter count.",
   "models": [
     {
       "id": "vision_dinov3_vitl16",
       "role": "industrial_visual_backbone",
       "upstream": "facebookresearch/dinov3",
-      "checkpoint": "DINOv3 ViT-L/16 LVD-1689M",
+      "checkpoint": "facebook/dinov3-vitl16-pretrain-lvd1689m",
       "parameters": 300000000,
       "pretraining_scale": "LVD-1689M (1.689B web images)",
-      "training_01_mode": "frozen_backbone_then_parameter_efficient_adapter",
+      "training_01_mode": "frozen_backbone_then_domain_head_and_parameter_efficient_adapter",
       "outputs": ["scene_embedding", "patch_embeddings", "industrial_scene_ood_score"],
       "license": "DINOv3 License",
       "status": "selected_with_license_review"
@@ -29,13 +29,25 @@
       "id": "audio_dasheng_06b",
       "role": "audio_vibration_representation",
       "upstream": "XiaoMi/dasheng",
-      "checkpoint": "Dasheng-0.6B",
+      "checkpoint": "mispeech/dasheng-0.6B",
       "parameters": 600000000,
       "pretraining_scale": "272k hours general audio",
-      "training_01_mode": "frozen_or_partial_finetune_on_SSCC_then_small_fault_head",
+      "training_01_mode": "frozen_backbone_then_fault_head; partial_finetune_only_if_closed_test_improves",
       "outputs": ["audio_embedding", "vibration_embedding", "fault_embedding"],
       "license": "Apache-2.0",
       "status": "selected"
+    },
+    {
+      "id": "sensor_moment_large",
+      "role": "sensor_integrity_anomaly_imputation_and_multichannel_representation",
+      "upstream": "moment-timeseries-foundation-model/moment",
+      "checkpoint": "AutonLab/MOMENT-1-large",
+      "parameters": 300000000,
+      "pretraining_scale": "Time-series Pile; multi-dataset public time-series pretraining",
+      "training_01_mode": "reconstruction_anomaly_baseline_plus_domain_head_or_PEFT_on_sensor_fault_windows",
+      "outputs": ["reconstruction", "anomaly_scores", "sensor_embedding", "imputed_signal", "fault_features"],
+      "license": "MIT",
+      "status": "selected_for_guided_sensor_tests"
     },
     {
       "id": "timeseries_chronos2",
@@ -47,6 +59,17 @@
       "outputs": ["probabilistic_forecast", "forecast_residual", "temporal_embedding", "anomaly_features"],
       "license": "Apache-2.0",
       "status": "selected"
+    },
+    {
+      "id": "timeseries_timesfm25",
+      "role": "temporal_forecast_cross_check",
+      "upstream": "google-research/timesfm",
+      "checkpoint": "google/timesfm-2.5-200m-pytorch",
+      "parameters": 200000000,
+      "training_01_mode": "zero_shot_benchmark_then_PEFT_LoRA_if_it_beats_Chronos_or_adds_complementary_error_detection",
+      "outputs": ["point_forecast", "quantile_forecast", "forecast_residual"],
+      "license": "Apache-2.0",
+      "status": "benchmark_candidate_not_for_redundant_ensemble_by_default"
     },
     {
       "id": "operator_qwen3_06b",
@@ -76,7 +99,7 @@
       "role": "multimodal_trust_fusion",
       "parameters": "small_by_design",
       "training_01_mode": "calibrated_gradient_boosting_or_small_MLP_plus_conformal_calibration",
-      "inputs": ["vision_evidence", "process_residuals", "motor_fault_evidence", "source_quality", "temporal_consistency"],
+      "inputs": ["vision_evidence", "process_residuals", "sensor_integrity_evidence", "motor_fault_evidence", "source_quality", "temporal_consistency"],
       "outputs": ["diagnostic_distribution", "calibrated_confidence", "abstain", "evidence_attribution"],
       "status": "must_be_small_auditable_and_calibrated"
     }
