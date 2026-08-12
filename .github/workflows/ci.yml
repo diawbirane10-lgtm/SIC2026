@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +25,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run core tests
-        run: pytest -q
+        run: python -m pytest -q
 
       - name: Rebuild public ML snapshot
         run: python train_models.py
