@@ -1,0 +1,96 @@
+name: FLOWTRUST T01-D Chronos CPU bootstrap
+
+on:
+  push:
+    branches: [v2-model-rebuild]
+    paths:
+      - '.github/workflows/t01d-chronos-cpu-bootstrap.yml'
+      - 'v2/training/t01_chronos_zero_shot.py'
+  workflow_dispatch:
+
+jobs:
+  chronos-zero-shot-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+    steps:
+      - name: Checkout V2 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install CPU Chronos-2 dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install 'chronos-forecasting>=2.2.0' numpy
+
+      - name: Download official UCI hydraulic dataset
+        run: |
+          mkdir -p data/uci
+          curl -L --fail --retry 5 --retry-delay 10 \
+            -o uci_hydraulic.zip \
+            'https://archive.ics.uci.edu/static/public/447/condition%2Bmonitoring%2Bof%2Bhydraulic%2Bsystems.zip'
+          sha256sum uci_hydraulic.zip | tee uci_hydraulic.sha256
+          unzip -q uci_hydraulic.zip -d data/uci
+
+      - name: Locate UCI root
+        id: uci
+        shell: bash
+        run: |
+          PS1=$(find data/uci -type f -name PS1.txt -print -quit)
+          test -n "$PS1"
+          ROOT=$(dirname "$PS1")
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Run Chronos-2 120M zero-shot temporal benchmark
+        run: |
+          mkdir -p artifacts/t01d_zero_shot
+          /usr/bin/time -v python v2/training/t01_chronos_zero_shot.py \
+            --root '${{ steps.uci.outputs.root }}' \
+            --outdir artifacts/t01d_zero_shot \
+            --context 256 \
+            --prediction-length 32 \
+            --max-cycles 12 \
+            --batch-size 2 \
+            2>&1 | tee artifacts/t01d_zero_shot/run.log
+
+      - name: Record provenance
+        if: always()
+        run: |
+          mkdir -p artifacts/t01d_zero_shot
+          cp uci_hydraulic.sha256 artifacts/t01d_zero_shot/ 2>/dev/null || true
+          python -m pip freeze > artifacts/t01d_zero_shot/pip_freeze.txt
+          python - <<'PY' > artifacts/t01d_zero_shot/runtime.txt
+          import os, platform, torch
+          print('python=', platform.python_version())
+          print('platform=', platform.platform())
+          print('torch=', torch.__version__)
+          print('cuda_available=', torch.cuda.is_available())
+          print('github_sha=', os.environ.get('GITHUB_SHA'))
+          PY
+          if [ -f artifacts/t01d_zero_shot/metrics.json ]; then
+            cat artifacts/t01d_zero_shot/metrics.json
+          fi
+
+      - name: Upload T01-D0 evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOWTRUST_T01D0_CPU_${{ github.sha }}
+          path: |
+            artifacts/t01d_zero_shot/metrics.json
+            artifacts/t01d_zero_shot/run.log
+            artifacts/t01d_zero_shot/runtime.txt
+            artifacts/t01d_zero_shot/pip_freeze.txt
+            artifacts/t01d_zero_shot/*.sha256
+          if-no-files-found: warn
+          retention-days: 14
