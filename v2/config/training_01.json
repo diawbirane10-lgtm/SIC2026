@@ -1,0 +1,54 @@
+{
+  "run_id": "FLOWTRUST-V2-T01-20260812",
+  "date": "2026-08-12",
+  "status": "prepared_for_gpu_execution",
+  "experiments": [
+    {
+      "id": "T01-A",
+      "name": "vision_scene_gate",
+      "model": "vision_dinov3_vitl16",
+      "datasets": ["iron_ore_conveyor_2025", "coalad_2026", "beltcrack_2025"],
+      "additional_negative_source": "Open Images V7 curated non-conveyor hard negatives",
+      "goal": "Reject non-industrial/non-conveyor scenes before AFR analysis.",
+      "primary_metrics": ["macro_f1", "auroc", "false_conveyor_accept_rate", "ece"],
+      "gate": "false_conveyor_accept_rate <= 0.02 on closed hard-negative test"
+    },
+    {
+      "id": "T01-B",
+      "name": "vision_anomaly_segmentation",
+      "model": "vision_sam3p1",
+      "datasets": ["iron_ore_conveyor_2025", "coalad_2026"],
+      "goal": "Segment belt/material and localize foreign objects/anomalies.",
+      "primary_metrics": ["mask_iou", "pixel_auroc", "image_auroc", "false_positive_rate"],
+      "gate": "qualitative review on unseen videos + no UI integration before benchmark report"
+    },
+    {
+      "id": "T01-C",
+      "name": "conveyor_audio_vibration",
+      "model": "audio_dasheng_06b",
+      "datasets": ["sscc_2026"],
+      "goal": "Learn normal vs conveyor fault representations across speed/load/noise.",
+      "primary_metrics": ["macro_f1", "balanced_accuracy", "leave_speed_out_f1", "noise_robustness"],
+      "gate": "must beat frozen-feature kNN baseline on held-out condition"
+    },
+    {
+      "id": "T01-D",
+      "name": "motor_and_process_timeseries",
+      "model": "timeseries_chronos2",
+      "datasets": ["mcc5_thu_motor_2026", "tennessee_eastman_extended", "uci_hydraulic_447"],
+      "goal": "Adapt probabilistic forecasting/embeddings to process and electromechanical trajectories; expose residual evidence.",
+      "primary_metrics": ["forecast_error", "residual_fault_auroc", "mode_holdout_auroc", "ece"],
+      "gate": "residual detector must improve over persistence/statistical baseline without >5% relative FPR increase"
+    },
+    {
+      "id": "T01-E",
+      "name": "operator_copilot",
+      "model": "operator_qwen3_06b",
+      "datasets": ["ibm_assetopsbench", "industrial_maintenance_synthetic_2026"],
+      "goal": "Choose diagnostic tools, explain structured evidence and propose verification steps without inventing measurements.",
+      "primary_metrics": ["tool_selection_accuracy", "evidence_faithfulness", "numeric_hallucination_rate", "unsafe_command_rate"],
+      "gate": "unsafe_command_rate = 0 and numeric_hallucination_rate <= 0.01 on closed evaluation"
+    }
+  ],
+  "integration_rule": "No experiment output is connected to the public operator HMI until its gate is passed and its provenance/metrics files are committed."
+}
