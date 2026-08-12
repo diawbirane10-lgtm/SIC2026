@@ -64,8 +64,19 @@ def unknown(evidence,fusion=None):return {'diagnostic':'unknown','confidence':0.
 def health():return {'status':'ok','version':VERSION,'mode':'advisory_read_only','automatic_control_allowed':False,'model_id':'flowtrust-linear-prior-v1','fusion_version':FUSION_VERSION,'model_origin':'distilled_linear_prior_from_sil_20260812','training_strategy':'offline_trained_linear_prior_plus_t02_fusion'}
 @app.post('/api/diagnose')
 def diagnose(payload:Payload):
-    x=payload.features
-    if any(k not in x for k in FEATURE_NAMES):return unknown(['Caractéristiques requises manquantes dans la requête.'])
+    raw=payload.features
+    missing=[]
+    x={}
+    for i,k in enumerate(FEATURE_NAMES):
+        try:
+            value=float(raw.get(k,float('nan')))
+        except (TypeError,ValueError):
+            value=float('nan')
+        if not math.isfinite(value):
+            missing.append(k); value=MEAN[i]
+        x[k]=value
+    missing_fraction=len(missing)/len(FEATURE_NAMES)
+    if missing_fraction>.20:return unknown([f'Missing fraction={missing_fraction:.1%}', 'Trop de caractéristiques sont absentes ou non finies.'])
     r=reliabilities(x);active=sum(v>=.35 for v in r.values())
     if active<2:return unknown(['Observabilité insuffisante : moins de deux modalités fiables.'])
     if float(x.get('weigh_signal_quality',1))<.20:return unknown(['Capteur de pesage suspect ou bloqué : source exclue et vérification requise.'])
@@ -75,7 +86,8 @@ def diagnose(payload:Payload):
         prior_x['visual_flow_proxy_tph']=float(x.get('measured_mass_flow_tph',0));prior_x['flow_disagreement_ratio']=0.0;prior_x['visual_occupancy_pct']=max(0.0,min(100.0,float(x.get('measured_mass_flow_tph',0))/1.05));prior_x['visual_accumulation_pct']=0.0;prior_x['visual_spillage_pct']=0.0;prior_x['camera_quality']=.98;prior_x['camera_connected']=1.0
     rfp,z=prior(prior_x)
     core_idx=[0,1,2,3,4,8,9,11,12,13,14,15,16]
-    if max(abs(z[i]) for i in core_idx)>12:return unknown(['Point très éloigné de l’enveloppe SIL connue : abstention OOD.'])
+    core_z=[abs(z[i]) for i in core_idx]
+    if max(core_z)>12:return unknown(['Point très éloigné de l’enveloppe SIL connue : abstention OOD.'])
     fu=fuse(x,rfp);ev=physical_rules(x)
     if fu['abstained']:ev.extend(fu['abstention_reasons']);return unknown(ev,fu)
     label=fu['diagnostic']
