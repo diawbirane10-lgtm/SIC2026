@@ -5,8 +5,9 @@ import joblib
 import numpy as np
 from fastapi import FastAPI
 from pydantic import BaseModel
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
 
-from flowtrust_core import FEATURE_NAMES, observability_gate, operator_recommendation, physical_rules
+from flowtrust_core import FEATURE_NAMES, generate_dataset, observability_gate, operator_recommendation, physical_rules
 from fusion_trust import FUSION_VERSION, fuse_multimodal_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,10 +22,45 @@ class Payload(BaseModel):
 _cache = {}
 
 
+def _build_embedded_snapshot():
+    """Build a compact deterministic SIL snapshot when binary artifacts are absent.
+
+    This keeps the Vercel demo self-contained. It is a public/SIL demonstrator
+    snapshot, not a model trained on SOCOCIM plant data.
+    """
+    X, y = generate_dataset(samples_per_class=360, seed=2026)
+    rf = RandomForestClassifier(
+        n_estimators=140,
+        max_depth=14,
+        min_samples_leaf=2,
+        class_weight="balanced",
+        random_state=2026,
+        n_jobs=-1,
+    ).fit(X, y)
+    iso = IsolationForest(
+        n_estimators=120,
+        contamination=0.04,
+        random_state=2026,
+        n_jobs=-1,
+    ).fit(X)
+    return rf, iso, "embedded_sil_snapshot"
+
+
 def load_models():
-    if not _cache:
-        _cache["rf"] = joblib.load(MODELS / "afr_rf_diagnostic_v1.joblib")
-        _cache["ood"] = joblib.load(MODELS / "afr_isolation_known_domain_v1.joblib")
+    if _cache:
+        return _cache
+
+    rf_path = MODELS / "afr_rf_diagnostic_v1.joblib"
+    ood_path = MODELS / "afr_isolation_known_domain_v1.joblib"
+    if rf_path.exists() and ood_path.exists():
+        _cache["rf"] = joblib.load(rf_path)["model"]
+        _cache["ood"] = joblib.load(ood_path)["model"]
+        _cache["origin"] = "versioned_joblib"
+    else:
+        rf, iso, origin = _build_embedded_snapshot()
+        _cache["rf"] = rf
+        _cache["ood"] = iso
+        _cache["origin"] = origin
     return _cache
 
 
@@ -36,20 +72,23 @@ def _safe_unknown(evidence, confidence=0.0, fusion=None):
         "evidence": list(evidence),
         "recommendation": operator_recommendation("unknown"),
         "fusion": fusion,
+        "fusion_version": FUSION_VERSION,
         "automatic_control_allowed": False,
     }
 
 
 @app.get("/api/health")
 def health():
+    models = load_models()
     return {
         "status": "ok",
         "version": "0.3.0",
         "mode": "advisory_read_only",
         "automatic_control_allowed": False,
-        "model_id": "afr-rf-diagnostic-v1",
+        "model_id": "flowtrust-t02-v1",
         "fusion_version": FUSION_VERSION,
-        "training_strategy": "synthetic_reproducible_public_snapshot",
+        "model_origin": models["origin"],
+        "training_strategy": "hybrid_traced_sil_public_auxiliary",
     }
 
 
@@ -67,8 +106,8 @@ def diagnose(payload: Payload):
         vector = np.nan_to_num(vector, nan=0.0)
 
     models = load_models()
-    rf = models["rf"]["model"]
-    iso = models["ood"]["model"]
+    rf = models["rf"]
+    iso = models["ood"]
 
     if iso.predict(vector)[0] < 0:
         return _safe_unknown(["Point hors enveloppe connue selon IsolationForest."])
@@ -102,5 +141,7 @@ def diagnose(payload: Payload):
         "evidence": evidence,
         "recommendation": operator_recommendation(label),
         "fusion": fusion,
+        "fusion_version": FUSION_VERSION,
+        "model_origin": models["origin"],
         "automatic_control_allowed": False,
     }
