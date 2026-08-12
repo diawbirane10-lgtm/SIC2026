@@ -1,98 +1,114 @@
 # FLOWTRUST-AFR — SIC2026
 
-**FLOWTRUST-AFR** est un assistant de diagnostic industriel multimodal pour la chaîne d'alimentation en **Alternative Fuels and Raw Materials (AFR)** d'une cimenterie. Le MVP fonctionne exclusivement en **mode conseil / lecture seule** : aucune commande automatique n'est autorisée et la décision finale reste à l'opérateur.
+**FLOWTRUST-AFR** est un assistant de diagnostic industriel multimodal pour la chaîne d'alimentation en **Alternative Fuels and Raw Materials (AFR)** d'une cimenterie. Le MVP reste strictement en **mode conseil / lecture seule** : il observe, confronte les sources, diagnostique ou s'abstient, puis propose des vérifications à l'opérateur. Il ne commande ni PLC, ni variateur, ni SCADA.
 
 ## Démonstration publique
 
 **Application :** https://flowtrust-afr-sic2026.vercel.app  
 **API santé :** https://flowtrust-afr-sic2026.vercel.app/api/health
 
-État vérifié du déploiement public au 12 août 2026 : `version 0.2.0`, `advisory_read_only`, `automatic_control_allowed=false`, modèle principal `afr-rf-diagnostic-v1`.
+État vérifié du déploiement public au **12 août 2026** :
 
-La branche `main` contient désormais le cœur **v0.3.0 / T02** avec fusion multimodale de confiance et abstention renforcée. Cette logique a passé la CI mais n'est pas encore revendiquée comme version servie par l'URL publique tant qu'un nouveau déploiement Vercel n'a pas été vérifié.
+- `version = 0.3.1`
+- `fusion_version = t02-edge-v1`
+- `mode = advisory_read_only`
+- `automatic_control_allowed = false`
+- `model_id = flowtrust-linear-prior-v1`
 
-## Documentation rapide
+## Expérience opérateur
 
-- [Architecture et logique de confiance](docs/ARCHITECTURE.md)
-- [Carte de validation et limites scientifiques](docs/VALIDATION.md)
-- [Proposition de pilote SOCOCIM](docs/PILOT_SOCOCIM.md)
+L'application ouvre directement sur une supervision temps réel de démonstration, sans page marketing intermédiaire. Elle propose :
 
-## Ce que le MVP surveille
+- synoptique trémie → doseur → convoyeur → transfert ;
+- débit, flux visuel, courant moteur, vitesse, niveau et vibration ;
+- tendances temps réel ;
+- diagnostic T02, confiance et état des modalités ;
+- explication des preuves et suggestion opérateur ;
+- journal chronologique ;
+- tests guidés à la demande ;
+- laboratoire d'injection de défauts ;
+- alarmes visuelles et buzzer pour les événements critiques ;
+- historique et replay progressif.
 
-La fusion exploite 25 caractéristiques couvrant notamment :
+Les défauts de démonstration couvrent notamment dérive de pesage, pontage de trémie, bourrage convoyeur, déversement, alimentation instable, perte caméra, capteur bloqué, désynchronisation et données manquantes.
 
-- commande doseur et vitesse convoyeur ;
-- vitesse réelle et ratio de vitesse ;
-- débit massique mesuré et proxy visuel ;
-- désaccord entre débit pesé et estimation visuelle ;
-- niveau et dérivée de niveau de trémie ;
-- résidu de bilan matière ;
-- courant, charge et couple moteur ;
-- vibration ;
-- variabilité temporelle du débit et du courant ;
-- accumulation et déversement vus par caméra ;
-- qualité des signaux instrumentation et caméra.
+## T02 — fusion multimodale de confiance
 
-## Diagnostics démontrés
+FLOWTRUST ne traite plus un classifieur unique comme arbitre absolu. T02 sépare trois familles de preuves :
 
-Le replay public contient sept situations :
+1. **procédé** — débit, trémie, bilan matière et dynamique de flux ;
+2. **électromécanique** — vitesse réelle/commandée, courant, charge, couple et vibration ;
+3. **vision** — proxy visuel, accumulation, déversement et qualité/disponibilité caméra.
 
-1. fonctionnement nominal ;
-2. dérive du système de pesage ;
-3. pontage de trémie ;
-4. bourrage convoyeur ;
-5. déversement de matière ;
-6. alimentation instable ;
-7. observabilité insuffisante, avec abstention obligatoire.
+Chaque modalité reçoit une fiabilité indépendante. Une source dégradée perd du poids ou est exclue. Le runtime edge exige au moins deux modalités fiables pour conclure. Les évidences multimodales portent **78 %** de la fusion ; le prior statistique distillé apporte **22 %** et ne peut pas contourner les gates d'observabilité, de contradiction ou de hors-domaine.
 
-## T02 — Fusion de confiance
+Lorsque les preuves sont insuffisantes ou incompatibles, la réponse attendue est `unknown` / **ABSTENTION**, et non un diagnostic forcé.
 
-Le module `fusion_trust.py` sépare trois avis interprétables : **procédé**, **électromécanique** et **vision**. Chaque canal est pondéré par sa qualité et sa complétude. Une modalité peu fiable est exclue et moins de deux modalités actives entraîne obligatoirement `unknown`.
+## Prior statistique edge
 
-Lorsque le Random Forest est disponible, son vecteur de probabilités sert uniquement de prior de soutien. Dans le prototype T02, les évidences multimodales conservent 58 % du poids et le prior statistique 42 %. Le système s'abstient aussi en cas de conflit fort modèle/physique, de diagnostics anormaux contradictoires, de désaccord débit/vision inexpliqué, de confiance trop faible ou de marge insuffisante.
+Pour rester léger et déployable sur Vercel/edge, le runtime public utilise `flowtrust-linear-prior-v1`, un prior logistique distillé et exporté en coefficients purs. Il a été entraîné hors ligne le **12/08/2026** sur le banc SIL public de 4 800 exemples, seed 2026, six classes.
 
-Les tests T02 couvrent notamment la perte d'une modalité, la perte de deux modalités, les contradictions volontaires, le désaccord mesure/vision et la traçabilité détaillée de la décision. Le workflow GitHub Actions a validé la suite puis reconstruit le snapshot ML avec succès.
+Sur son split fermé SIL, ce prior atteint :
 
-## Modèles actifs dans le déploiement public v0.2.0
+- balanced accuracy : **0,99917** ;
+- log loss multiclasses : **0,00405**.
 
-- `afr-physics-rules-v1` — règles de cohérence physique ;
-- `afr-rf-diagnostic-v1` — classifieur diagnostic ;
-- `afr-isolation-known-domain-v1` — détection hors domaine / abstention ;
-- `opencv-fixed-camera-occupancy-v1` — baseline vision caméra fixe ;
-- `public-iron-ore-conveyor-extra-trees-v1` — prior visuel issu d'un convoyeur de minerai public ;
-- `uci-real-flow-dynamics-rf-v1` — preuve auxiliaire de transfert sur dynamique réelle hors domaine AFR.
+Ces métriques caractérisent uniquement le banc synthétique reproductible. Elles ne constituent pas une mesure de performance SOCOCIM. Le fichier versionné est [`models/linear_prior_v1.json`](models/linear_prior_v1.json).
 
-Deux adaptateurs vision restent volontairement non activés dans le MVP (`segformer-onnx-industrial-adapter-v1` et `visual-changenet-onnx-adapter-v1`) car les poids spécialisés et la calibration caméra de site ne sont pas disponibles.
+## Random Forest (RF)
 
-## Validation et limites
+**RF signifie Random Forest, ou forêt aléatoire.** Il s'agit d'un ensemble d'arbres de décision entraînés sur des sous-échantillons de données et/ou de variables. Les votes des arbres sont agrégés pour produire une classe et des probabilités. RF reste présent dans le banc R&D comme baseline explicable ; dans le runtime edge v0.3.1, il a été distillé vers un prior linéaire beaucoup plus léger, tandis que la décision finale reste assurée par la fusion T02.
 
-Le modèle diagnostic principal a été évalué sur un banc **SIL synthétique** de 4 800 exemples, seed 2026, six classes. Le déploiement public v0.2.0 expose les métriques et les tests de torture via :
+## Caméra de la tablette
 
-- `/api/models`
-- `/api/validation`
-- `/api/scenarios`
-- `/api/datasets`
+La caméra du navigateur est activée uniquement après autorisation utilisateur. Dans la version publique actuelle, le test local mesure :
 
-Les performances du banc synthétique ne doivent **jamais** être présentées comme une performance SOCOCIM réelle. Les validations de transfert sur UCI Hydraulic Systems et sur le jeu d'images de convoyeur de minerai constituent uniquement des preuves auxiliaires hors domaine ciment/AFR.
+- luminosité ;
+- contraste ;
+- netteté ;
+- qualité technique globale de l'image.
 
-Les tests de robustesse du MVP vérifient notamment le bruit, les données manquantes, les capteurs bloqués, les pertes de rafales, la désynchronisation, les perturbations caméra et l'absence de violation du principe read-only.
+**Ce score ne signifie pas qu'un convoyeur ou un défaut AFR a été reconnu.** Le scene-gate industriel basé sur des backbones de vision préentraînés reste dans la trajectoire V2 et ne sera activé publiquement qu'après validation de son gate hors-domaine.
 
-## Snapshot reproductible dans ce dépôt
+## Discipline de sélection des modèles V2
 
-Le dépôt contient une reconstruction publique et auditable du cœur SIL :
+La branche `v2-model-rebuild` conserve les expériences de reconstruction : vision à grande échelle, intégrité capteurs, séries temporelles, audio/vibration et copilote opérateur. Un modèle n'est pas retenu parce qu'il est plus gros : il doit battre une baseline adaptée sur un split fermé et respecter un gate prédéfini.
 
-- `flowtrust_core.py` — générateur synthétique, règles physiques, contrôle d'observabilité ;
-- `fusion_trust.py` — T02, fusion procédé/électromécanique/vision, pondération par confiance et abstention ;
-- `train_models.py` — entraînement déterministe Random Forest + Isolation Forest ;
-- `api/main.py` — endpoint FastAPI de diagnostic v0.3.0 en mode conseil, routé par T02 ;
-- `index.html`, `styles.css`, `app.js` — miroir web léger pour lecture du concept ;
-- `tests/test_core.py` — tests de reproductibilité, observabilité et règles de sûreté ;
-- `tests/test_fusion.py` — torture gates T02 ;
-- `.github/workflows/ci.yml` — CI de test et reconstruction du snapshot ML.
+Exemples du premier cycle :
 
-Le déploiement Vercel v0.2.0 reste la démonstration publique de référence jusqu'au prochain déploiement vérifié. Le snapshot GitHub rend la logique scientifique principale lisible et reproductible sans publier de données industrielles propriétaires.
+- MOMENT initial : rejeté après comparaison à la baseline capteur ;
+- challenger capteurs T01-F1 : macro-F1 ≈ **0,884**, amélioration forte mais sous le gate volontaire de 0,90 ;
+- Chronos / forecasting : non retenu pour ce bloc lorsque la persistance s'est révélée meilleure.
 
-## Reproduire le cœur ML
+Cette discipline évite d'intégrer artificiellement des foundation models qui n'apportent pas de gain mesuré au MVP.
+
+## Données et validation
+
+Le dépôt sépare trois niveaux de preuve :
+
+- **SIL synthétique reproductible** pour le pipeline, les scénarios, la fusion et l'abstention ;
+- **données physiques publiques hors domaine** comme preuves auxiliaires de transférabilité ;
+- **données SOCOCIM** pour la calibration et la validation du futur pilote.
+
+Le système teste notamment données manquantes, capteurs bloqués, qualité caméra dégradée, perte de modalité, désynchronisation et contradictions entre sources. Aucune écriture automatique n'est autorisée.
+
+## Structure du dépôt
+
+- `flowtrust_core.py` — génération SIL, règles physiques et observabilité ;
+- `fusion_trust.py` — implémentation R&D complète de la fusion T02 ;
+- `models/linear_prior_v1.json` — prior statistique distillé et traçable ;
+- `api/main.py` — implémentation Python de référence du runtime edge ;
+- `deploy/vercel/` — runtime Node minimal correspondant au déploiement Vercel ;
+- `index.html`, `styles.css`, `app.js` — HMI de démonstration ;
+- `t02-live.js` — liaison HMI ↔ `/api/diagnose` ;
+- `tests/test_core.py` — règles de sûreté du cœur ;
+- `tests/test_fusion.py` — gates et contradictions T02 ;
+- `tests/test_api_t02.py` — contrat API, abstention et perte de modalité ;
+- `.github/workflows/ci.yml` — CI de reconstruction et tests.
+
+La CI vérifie également la syntaxe JavaScript de l'HMI et reconstruit le snapshot ML avant les tests API.
+
+## Reproduire le cœur R&D
 
 ```bash
 python -m venv .venv
@@ -103,15 +119,17 @@ python train_models.py
 uvicorn api.main:app --reload
 ```
 
-Les modèles sont générés localement dans `models/` afin d'éviter de versionner inutilement des artefacts binaires lourds.
+## Pilote industriel proposé
 
-## Trajectoire pilote industriel
+Le premier pilote reste non intrusif : **OPC UA / historian en lecture seule**, acquisition des variables utiles, caméra industrielle fixe sur une zone AFR choisie, edge computer local, écran opérateur, journalisation, replay historique puis shadow mode. Le passage au mode conseil intervient après calibration et validation site.
 
-Le premier pilote doit rester non intrusif : connexion OPC UA en lecture seule, acquisition des variables pertinentes, caméra industrielle fixe sur une zone AFR choisie, edge computer/IPC local, écran opérateur, journalisation, replay historique puis **shadow mode**. Le passage au mode conseil ne vient qu'après calibration et validation site. Toute écriture dans le SCADA ou tout contrôle automatique est hors périmètre du MVP.
+FLOWTRUST-AFR n'est ni un SIS ni une protection machine. La décision finale reste à l'opérateur.
 
-## Sécurité et revendications
+## Documentation
 
-FLOWTRUST-AFR n'est ni un SIS, ni une protection machine, ni un système certifié de contrôle-commande. Il s'agit d'un assistant de diagnostic et d'aide à la décision. Aucune économie, fiabilité, probabilité de panne ou performance site-specific ne doit être revendiquée avant une campagne de validation industrielle.
+- [Architecture](docs/ARCHITECTURE.md)
+- [Validation](docs/VALIDATION.md)
+- [Pilote SOCOCIM](docs/PILOT_SOCOCIM.md)
 
 ## Licence
 
