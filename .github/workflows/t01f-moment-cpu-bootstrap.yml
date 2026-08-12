@@ -1,0 +1,112 @@
+name: FLOWTRUST T01-F MOMENT CPU bootstrap
+
+on:
+  push:
+    branches: [v2-model-rebuild]
+    paths:
+      - '.github/workflows/t01f-moment-cpu-bootstrap.yml'
+      - 'v2/training/t01_sensor_moment.py'
+      - 'v2/training/build_t01f_uci_sensor_dataset.py'
+  workflow_dispatch:
+
+jobs:
+  sensor-integrity-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+    steps:
+      - name: Checkout V2 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install CPU MOMENT dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install 'momentfm>=0.1.4' 'transformers<5' 'huggingface-hub>=0.30' 'scikit-learn>=1.6,<1.8' numpy joblib
+
+      - name: Download UCI hydraulic real sensor data
+        run: |
+          mkdir -p data/uci
+          curl -L --fail --retry 5 --retry-delay 10 \
+            -o uci_hydraulic.zip \
+            'https://archive.ics.uci.edu/static/public/447/condition%2Bmonitoring%2Bof%2Bhydraulic%2Bsystems.zip'
+          sha256sum uci_hydraulic.zip | tee uci_hydraulic.sha256
+          unzip -q uci_hydraulic.zip -d data/uci
+          find data/uci -name PS1.txt -o -name EPS1.txt -o -name profile.txt | sort
+
+      - name: Locate UCI dataset root
+        id: uci
+        shell: bash
+        run: |
+          PS1=$(find data/uci -type f -name PS1.txt -print -quit)
+          if [ -z "$PS1" ]; then
+            echo 'PS1.txt not found' >&2
+            find data/uci -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+          ROOT=$(dirname "$PS1")
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          echo "UCI root: $ROOT"
+
+      - name: Build grouped real-signal sensor-fault bootstrap
+        run: |
+          python v2/training/build_t01f_uci_sensor_dataset.py \
+            --root '${{ steps.uci.outputs.root }}' \
+            --out data/t01f_uci_sensor_faults.npz \
+            --max-cycles 36 \
+            --seed 2026
+
+      - name: Run MOMENT-1-large 341M guided-sensor bootstrap on CPU
+        run: |
+          mkdir -p artifacts/t01f_cpu_bootstrap
+          /usr/bin/time -v python v2/training/t01_sensor_moment.py \
+            --data data/t01f_uci_sensor_faults.npz \
+            --device cpu \
+            --batch-size 2 \
+            --outdir artifacts/t01f_cpu_bootstrap \
+            2>&1 | tee artifacts/t01f_cpu_bootstrap/run.log
+
+      - name: Record provenance
+        if: always()
+        run: |
+          mkdir -p artifacts/t01f_cpu_bootstrap
+          cp uci_hydraulic.sha256 artifacts/t01f_cpu_bootstrap/ 2>/dev/null || true
+          python -m pip freeze > artifacts/t01f_cpu_bootstrap/pip_freeze.txt
+          python - <<'PY' > artifacts/t01f_cpu_bootstrap/runtime.txt
+          import os, platform, torch
+          print('python=', platform.python_version())
+          print('platform=', platform.platform())
+          print('torch=', torch.__version__)
+          print('cuda_available=', torch.cuda.is_available())
+          print('github_sha=', os.environ.get('GITHUB_SHA'))
+          PY
+          if [ -f artifacts/t01f_cpu_bootstrap/metrics.json ]; then
+            cat artifacts/t01f_cpu_bootstrap/metrics.json
+          fi
+
+      - name: Upload T01-F0 evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOWTRUST_T01F0_CPU_${{ github.sha }}
+          path: |
+            artifacts/t01f_cpu_bootstrap/metrics.json
+            artifacts/t01f_cpu_bootstrap/closed_test_outputs.npz
+            artifacts/t01f_cpu_bootstrap/sensor_fault_head.joblib
+            artifacts/t01f_cpu_bootstrap/statistical_baseline_head.joblib
+            artifacts/t01f_cpu_bootstrap/run.log
+            artifacts/t01f_cpu_bootstrap/runtime.txt
+            artifacts/t01f_cpu_bootstrap/pip_freeze.txt
+            artifacts/t01f_cpu_bootstrap/*.sha256
+          if-no-files-found: warn
+          retention-days: 14
