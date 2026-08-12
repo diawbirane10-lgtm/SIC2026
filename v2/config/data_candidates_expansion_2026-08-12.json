@@ -1,0 +1,75 @@
+{
+  "date": "2026-08-12",
+  "purpose": "Verified expansion pool discovered during targeted Training 01 research. These sources are not automatically mixed into T01; they are reserved for cross-domain validation or later adaptations.",
+  "sources": [
+    {
+      "id": "metropt3",
+      "priority": "P0-next",
+      "source": "UCI Machine Learning Repository dataset 791",
+      "doi": "10.24432/C5VW3R",
+      "license": "CC BY 4.0",
+      "scale": "1,516,948 rows; 15 features; ~208 MB CSV",
+      "modalities": ["pressure", "temperature", "motor_current", "valve_states", "time_series"],
+      "value": "Real operational metro compressor data for predictive maintenance, anomaly explanation and failure prediction. Useful closed transfer set for temporal/OOD branches."
+    },
+    {
+      "id": "belt_drive_vibration_2022",
+      "priority": "P1",
+      "source": "Mendeley Data",
+      "doi": "10.17632/jf8v2ndydr.1",
+      "license": "CC BY 4.0",
+      "scale": "459 experimental runs",
+      "modalities": ["vibration", "speed", "belt_pretension", "imbalance_condition"],
+      "value": "Healthy belt, faulty belt and imbalance across 17 speeds, 3 pretensions and repeated runs. Directly useful for belt/drive transfer."
+    },
+    {
+      "id": "rotating_machine_multimodal_kaist",
+      "priority": "P1",
+      "source": "Mendeley Data",
+      "doi": "10.17632/ztmf3m7h5x.4",
+      "license": "CC BY 4.0",
+      "scale": "~2.48 GB vibration + 1.44 GB current/temperature + 45 MB acoustic",
+      "modalities": ["vibration", "acoustic", "temperature", "motor_current", "load"],
+      "value": "Strong external test for multimodal electromechanical fusion and cross-sensor consistency."
+    },
+    {
+      "id": "bearing_variable_speed_part2",
+      "priority": "P1",
+      "source": "Mendeley Data",
+      "doi": "10.17632/x3vhp8t6hg.1",
+      "license": "CC BY 4.0",
+      "scale": "5.15 GB; 2,100 s runs; vibration 25.6 kHz, current 100 kHz",
+      "modalities": ["vibration", "motor_current", "rotational_speed"],
+      "value": "Normal, inner-race, outer-race and ball faults under randomly varying 680–2460 RPM; useful for variable-speed generalization."
+    },
+    {
+      "id": "upatras_rotating_2026",
+      "priority": "P2",
+      "source": "Mendeley Data",
+      "doi": "10.17632/42v3s74gf9.1",
+      "license": "CC BY 4.0",
+      "scale": "62.3 MB",
+      "modalities": ["vibration", "varying_speed"],
+      "value": "Recent incipient-fault dataset for early-fault sensitivity testing."
+    },
+    {
+      "id": "steelds_conveyor_2026",
+      "priority": "candidate-license-review",
+      "source": "Zenodo record 20271102",
+      "doi": "10.5281/zenodo.20271102",
+      "license": "NO_LICENSE_TEXT_EXPOSED_ON_RECORD_AT_REVIEW_TIME",
+      "scale": "67.6 GB high-resolution video/images",
+      "modalities": ["video", "image", "instance_segmentation", "tracking", "material_classification"],
+      "value": "High-resolution steel/copper scrap under simulated industrial conveyor conditions; potentially excellent visual transfer set, but blocked until explicit reuse terms are confirmed."
+    },
+    {
+      "id": "construction_demolition_waste_conveyor",
+      "priority": "candidate-license-review",
+      "source": "Zenodo record 17447590",
+      "license": "VERIFY_BEFORE_USE",
+      "scale": "1,630 high-resolution moving-conveyor images",
+      "modalities": ["image", "object_detection", "tracking"],
+      "value": "Five material classes under real conveyor motion; relevant scene diversity if licensing is confirmed."
+    }
+  ]
+}
