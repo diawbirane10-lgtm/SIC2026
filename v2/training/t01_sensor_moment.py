@@ -45,16 +45,44 @@ def group_split(groups, seed=2026):
     return tr, rest[va_rel], rest[te_rel]
 
 
+def statistical_features(X):
+    feats = []
+    t = np.linspace(-1.0, 1.0, X.shape[-1], dtype=np.float32)
+    for sample in X:
+        row = []
+        for ch in sample:
+            finite = np.nan_to_num(ch, nan=0.0, posinf=0.0, neginf=0.0)
+            d = np.diff(finite)
+            mu = float(finite.mean())
+            std = float(finite.std() + 1e-8)
+            slope = float(np.dot(finite - mu, t) / (np.dot(t, t) + 1e-8))
+            repeated = float(np.mean(np.isclose(d, 0.0, atol=max(1e-6, std * 1e-4))))
+            zero_fraction = float(np.mean(np.isclose(finite, 0.0, atol=max(1e-6, std * 1e-4))))
+            q01, q99 = np.quantile(finite, [0.01, 0.99])
+            clip_fraction = float(np.mean((finite <= q01 + 1e-8) | (finite >= q99 - 1e-8)))
+            ac = float(np.corrcoef(finite[:-1], finite[1:])[0, 1]) if std > 1e-7 else 1.0
+            if not np.isfinite(ac):
+                ac = 0.0
+            row.extend([
+                mu, std, float(finite.min()), float(finite.max()),
+                float(np.ptp(finite)), slope, float(np.std(d)),
+                float(np.max(np.abs(d))) if len(d) else 0.0,
+                repeated, zero_fraction, clip_fraction, ac,
+            ])
+        feats.append(row)
+    return np.asarray(feats, dtype=np.float32)
+
+
 def extract_embeddings(X, batch_size, device, out_cache: Path):
     if out_cache.exists():
         z = np.load(out_cache, allow_pickle=False)
         if tuple(z["embeddings"].shape[:1]) == (len(X),):
-            return z["embeddings"]
+            return z["embeddings"], int(z.get("encoder_parameters", np.asarray(341_231_104)).item())
 
     model = MOMENTPipeline.from_pretrained(MODEL_ID, model_kwargs={"task_name": "embedding"})
     model.init()
     model.to(device).eval()
-    enc_params = sum(p.numel() for p in model.encoder.parameters())
+    enc_params = int(sum(p.numel() for p in model.encoder.parameters()))
     if enc_params != 341_231_104:
         print(f"WARNING: upstream encoder parameter count changed: {enc_params:,}")
 
@@ -67,8 +95,19 @@ def extract_embeddings(X, batch_size, device, out_cache: Path):
             print(f"embedded {min(i+batch_size,len(X))}/{len(X)}")
     emb = np.concatenate(chunks)
     out_cache.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out_cache, embeddings=emb)
-    return emb
+    np.savez_compressed(out_cache, embeddings=emb, encoder_parameters=np.asarray(enc_params, dtype=np.int64))
+    return emb, enc_params
+
+
+def fit_calibrated(X, y, tr, va, seed):
+    base = Pipeline([
+        ("scale", StandardScaler()),
+        ("clf", LogisticRegression(max_iter=3000, class_weight="balanced", C=1.0, random_state=seed)),
+    ])
+    base.fit(X[tr], y[tr])
+    calibrated = CalibratedClassifierCV(FrozenEstimator(base), method="sigmoid")
+    calibrated.fit(X[va], y[va])
+    return calibrated
 
 
 def main():
@@ -77,50 +116,77 @@ def main():
     ap.add_argument("--outdir", type=Path, default=Path("artifacts/t01/sensor_integrity"))
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto")
     args = ap.parse_args()
 
-    if not torch.cuda.is_available():
-        raise RuntimeError("T01-F requires CUDA for the 341M MOMENT-1-large backbone.")
-    device = "cuda"
+    if args.device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device = args.device
+    if device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but unavailable")
+    print(f"T01-F device={device}")
+
     X, y_names, groups = load_npz(args.data)
     tr, va, te = group_split(groups, args.seed)
     args.outdir.mkdir(parents=True, exist_ok=True)
-    emb = extract_embeddings(X, args.batch_size, device, args.outdir / "moment_embeddings.npz")
 
     le = LabelEncoder().fit(y_names)
     y = le.transform(y_names)
-    base = Pipeline([
-        ("scale", StandardScaler()),
-        ("clf", LogisticRegression(max_iter=3000, class_weight="balanced", C=1.0, random_state=args.seed)),
-    ])
-    base.fit(emb[tr], y[tr])
-    calibrated = CalibratedClassifierCV(FrozenEstimator(base), method="sigmoid")
-    calibrated.fit(emb[va], y[va])
-    pred = calibrated.predict(emb[te])
-    proba = calibrated.predict_proba(emb[te])
+
+    stat = statistical_features(X)
+    stat_head = fit_calibrated(stat, y, tr, va, args.seed)
+    stat_pred = stat_head.predict(stat[te])
+    stat_f1 = float(f1_score(y[te], stat_pred, average="macro"))
+    stat_bal = float(balanced_accuracy_score(y[te], stat_pred))
+
+    emb, enc_params = extract_embeddings(X, args.batch_size, device, args.outdir / "moment_embeddings.npz")
+    moment_head = fit_calibrated(emb, y, tr, va, args.seed)
+    pred = moment_head.predict(emb[te])
+    proba = moment_head.predict_proba(emb[te])
 
     true_names = le.inverse_transform(y[te])
     pred_names = le.inverse_transform(pred)
+    macro_f1 = float(f1_score(y[te], pred, average="macro"))
+    bal_acc = float(balanced_accuracy_score(y[te], pred))
+    improvement = macro_f1 - stat_f1
+
     report = {
         "run_id": "FLOWTRUST-V2-T01-F-20260812",
         "foundation": MODEL_ID,
-        "foundation_encoder_parameters": 341_231_104,
+        "foundation_encoder_parameters": enc_params,
+        "device": device,
         "training": "calibrated linear probe on frozen foundation embeddings",
-        "split": "group-disjoint 70/15/15",
+        "split": "group-disjoint 70/15/15 by physical source cycle",
         "classes": le.classes_.tolist(),
-        "counts": {"train": len(tr), "validation": len(va), "test": len(te)},
-        "macro_f1": float(f1_score(y[te], pred, average="macro")),
-        "balanced_accuracy": float(balanced_accuracy_score(y[te], pred)),
+        "counts": {"train": int(len(tr)), "validation": int(len(va)), "test": int(len(te))},
+        "macro_f1": macro_f1,
+        "balanced_accuracy": bal_acc,
         "confusion_matrix": confusion_matrix(y[te], pred, labels=np.arange(len(le.classes_))).tolist(),
         "classification_report": classification_report(true_names, pred_names, output_dict=True, zero_division=0),
         "closed_test_mean_confidence": float(proba.max(1).mean()),
+        "statistical_baseline": {
+            "description": "logistic classifier on per-channel distribution, slope, derivative, repeated-value, zero/dropout, clipping and autocorrelation features",
+            "macro_f1": stat_f1,
+            "balanced_accuracy": stat_bal,
+        },
+        "moment_minus_baseline_macro_f1": improvement,
+        "bootstrap_gate": "MOMENT macro-F1 >= statistical baseline macro-F1 and MOMENT balanced accuracy >= baseline balanced accuracy",
+        "bootstrap_gate_passed": bool(macro_f1 >= stat_f1 and bal_acc >= stat_bal),
         "required_fault_labels": ["normal", "stuck_at", "drift", "bias", "spike", "noise_burst", "dropout", "timestamp_shift", "clipping"],
-        "note": "Reconstruction anomaly score remains a second independent MOMENT evidence channel; this experiment trains the guided-test fault-type head."
+        "note": "Fault classes in this bootstrap are controlled sensor corruptions injected on real physical UCI hydraulic cycles; this evaluates sensor-integrity recognition, not cement-process diagnosis."
     }
-    joblib.dump({"head": calibrated, "label_encoder": le, "foundation": MODEL_ID}, args.outdir / "sensor_fault_head.joblib")
+    joblib.dump({"head": moment_head, "label_encoder": le, "foundation": MODEL_ID}, args.outdir / "sensor_fault_head.joblib")
+    joblib.dump({"head": stat_head, "label_encoder": le}, args.outdir / "statistical_baseline_head.joblib")
     (args.outdir / "metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     np.savez_compressed(args.outdir / "closed_test_outputs.npz", indices=te, y_true=y[te], y_pred=pred, proba=proba)
-    print(json.dumps({"macro_f1": report["macro_f1"], "balanced_accuracy": report["balanced_accuracy"]}, indent=2))
+    print(json.dumps({
+        "macro_f1": macro_f1,
+        "balanced_accuracy": bal_acc,
+        "statistical_macro_f1": stat_f1,
+        "statistical_balanced_accuracy": stat_bal,
+        "bootstrap_gate_passed": report["bootstrap_gate_passed"],
+    }, indent=2))
 
 
 if __name__ == "__main__":
