@@ -12,7 +12,7 @@ on:
 jobs:
   scene-gate-bootstrap:
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: 180
     env:
       HF_HUB_DISABLE_XET: '1'
       TOKENIZERS_PARALLELISM: 'false'
@@ -34,50 +34,65 @@ jobs:
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           pip install 'transformers>=4.56,<5' 'huggingface-hub>=0.30' 'scikit-learn>=1.6,<1.8' pandas joblib pillow numpy
 
-      - name: Download CoalAD conveyor positives
+      - name: Download bounded real conveyor positives
         run: |
-          mkdir -p data
-          curl -L --fail --retry 5 --retry-delay 10 \
-            -o coal_ad_train.tar \
-            'https://www.modelscope.cn/datasets/lyfjwp/CoalAD/resolve/master/coal_ad_train.tar'
-          sha256sum coal_ad_train.tar | tee coal_ad_train.sha256
-          tar -xf coal_ad_train.tar -C data
-          find data -maxdepth 4 -type d | head -50
+          mkdir -p data/inspectsafe
+          python - <<'PY'
+          from pathlib import Path
+          from huggingface_hub import list_repo_files, hf_hub_download
+
+          repo = 'Tetrabot2026/InspecSafe-V1'
+          files = list_repo_files(repo, repo_type='dataset')
+          candidates = [
+              p for p in files
+              if p.lower().endswith(('.jpg', '.jpeg', '.png'))
+              and 'annotations' in p.lower()
+              and 'coal_conveyor' in p.lower()
+          ]
+          # One visible-light frame per waypoint/folder avoids near-duplicate leakage.
+          by_parent = {}
+          for p in sorted(candidates):
+              by_parent.setdefault(str(Path(p).parent), p)
+          unique = list(by_parent.values())
+          if len(unique) < 64:
+              raise RuntimeError(f'Only {len(unique)} unique coal-conveyor waypoint images found')
+          n = min(192, len(unique))
+          step = len(unique) / n
+          selected = [unique[int(i * step)] for i in range(n)]
+          for i, p in enumerate(selected, 1):
+              hf_hub_download(
+                  repo_id=repo,
+                  filename=p,
+                  repo_type='dataset',
+                  local_dir='data/inspectsafe',
+              )
+              if i % 24 == 0 or i == len(selected):
+                  print(f'downloaded {i}/{len(selected)} conveyor waypoint images')
+          Path('inspectsafe_selection.txt').write_text('\n'.join(selected) + '\n', encoding='utf-8')
+          print('candidate_files=', len(candidates), 'unique_waypoints=', len(unique), 'selected=', len(selected))
+          PY
+          sha256sum inspectsafe_selection.txt | tee inspectsafe_selection.sha256
 
       - name: Download COCO hard negatives
         run: |
-          curl -L --fail --retry 5 --retry-delay 10 \
+          curl -L --fail --retry 5 --retry-delay 10 --max-time 1200 \
             -o val2017.zip \
             'http://images.cocodataset.org/zips/val2017.zip'
           sha256sum val2017.zip | tee coco_val2017.sha256
           mkdir -p data/coco
           unzip -q val2017.zip -d data/coco
 
-      - name: Locate CoalAD root
-        id: coalad
-        shell: bash
-        run: |
-          ROOT=$(find data -type d -path '*/coal_ad/train' -print -quit | sed 's#/train$##')
-          if [ -z "$ROOT" ]; then
-            ROOT=$(find data -type d -name train -print -quit | xargs -r dirname)
-          fi
-          if [ -z "$ROOT" ]; then
-            echo 'CoalAD root not found' >&2
-            find data -maxdepth 5 -type d | sort | head -200
-            exit 1
-          fi
-          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
-          echo "CoalAD root: $ROOT"
-
       - name: Build balanced bootstrap manifest
         run: |
           python v2/training/build_t01a_bootstrap_manifest.py \
-            --coalad '${{ steps.coalad.outputs.root }}' \
+            --positive-root data/inspectsafe \
+            --positive-source inspectsafe_v1_coal_conveyor \
+            --positive-license CC-BY-4.0 \
             --negative-root data/coco/val2017 \
             --out data/manifests/t01a_cpu_bootstrap.csv \
             --max-positive 192 \
             --max-negative 192 \
-            --positive-chunk 16 \
+            --positive-chunk 1 \
             --negative-chunk 8
           python - <<'PY'
           import pandas as pd
@@ -102,7 +117,8 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts/t01a_cpu_bootstrap
-          cp coal_ad_train.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp inspectsafe_selection.txt artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp inspectsafe_selection.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
           cp coco_val2017.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
           cp data/manifests/t01a_cpu_bootstrap.csv artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
           python -m pip freeze > artifacts/t01a_cpu_bootstrap/pip_freeze.txt
@@ -132,5 +148,6 @@ jobs:
             artifacts/t01a_cpu_bootstrap/pip_freeze.txt
             artifacts/t01a_cpu_bootstrap/*.sha256
             artifacts/t01a_cpu_bootstrap/t01a_cpu_bootstrap.csv
+            artifacts/t01a_cpu_bootstrap/inspectsafe_selection.txt
           if-no-files-found: warn
           retention-days: 14
