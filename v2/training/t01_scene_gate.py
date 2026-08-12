@@ -65,7 +65,7 @@ def extract_embeddings(df, model_id, batch_size, device, cache_path):
     dtype = torch.bfloat16 if device.startswith("cuda") and torch.cuda.is_bf16_supported() else torch.float32
     model = AutoModel.from_pretrained(model_id, torch_dtype=dtype).to(device).eval()
     model_parameters = int(sum(p.numel() for p in model.parameters()))
-    print(f"Loaded {model_id}: {model_parameters:,} parameters")
+    print(f"Loaded {model_id}: {model_parameters:,} parameters on {device}")
 
     chunks = []
     with torch.inference_mode():
@@ -117,11 +117,18 @@ def main():
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument(
+        "--allow-cpu",
+        action="store_true",
+        help="Allow an exploratory CPU bootstrap. GPU remains mandatory for the final T01-A candidate run.",
+    )
     args = ap.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    if device != "cuda":
-        raise RuntimeError("T01-A requires a CUDA GPU for the selected large vision backbone.")
+    if device != "cuda" and not args.allow_cpu:
+        raise RuntimeError(
+            "T01-A final candidate requires CUDA. Use --allow-cpu only for an exploratory bootstrap run."
+        )
 
     df = load_manifest(args.manifest).reset_index(drop=True)
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -146,9 +153,12 @@ def main():
     pred = calibrated.predict(embeddings[te])
     true_names = le.inverse_transform(y[te])
     pred_names = le.inverse_transform(pred)
+    false_accept = false_conveyor_accept_rate(true_names, pred_names)
 
     report = {
         "run_id": "FLOWTRUST-V2-T01-A-20260812",
+        "execution_device": device,
+        "run_tier": "candidate_gpu" if device == "cuda" else "exploratory_cpu_bootstrap",
         "model": args.model,
         "backbone_parameters": model_parameters,
         "head": "logistic_regression_on_frozen_embeddings",
@@ -161,16 +171,19 @@ def main():
         },
         "macro_f1": float(f1_score(y[te], pred, average="macro")),
         "ece": expected_calibration_error(y[te], proba),
-        "false_conveyor_accept_rate": false_conveyor_accept_rate(true_names, pred_names),
+        "false_conveyor_accept_rate": false_accept,
         "confusion_matrix": confusion_matrix(y[te], pred, labels=np.arange(len(le.classes_))).tolist(),
         "classes": le.classes_.tolist(),
         "classification_report": classification_report(true_names, pred_names, output_dict=True, zero_division=0),
         "gate": "false_conveyor_accept_rate <= 0.02",
     }
-    report["gate_passed"] = (
-        report["false_conveyor_accept_rate"] is not None
-        and report["false_conveyor_accept_rate"] <= 0.02
-    )
+    statistical_gate = false_accept is not None and false_accept <= 0.02
+    report["statistical_gate_passed"] = statistical_gate
+    report["integration_gate_passed"] = statistical_gate and device == "cuda"
+    if device != "cuda":
+        report["integration_block_reason"] = (
+            "CPU bootstrap is exploratory; rerun the unchanged closed-test protocol on GPU before HMI integration."
+        )
 
     joblib.dump(
         {"classifier": calibrated, "label_encoder": le, "model_id": args.model, "model_parameters": model_parameters},
@@ -181,7 +194,10 @@ def main():
         args.outdir / "closed_test_predictions.csv", index=False
     )
     print(json.dumps(
-        {k: report[k] for k in ["model", "backbone_parameters", "macro_f1", "ece", "false_conveyor_accept_rate", "gate_passed"]},
+        {k: report[k] for k in [
+            "run_tier", "model", "backbone_parameters", "macro_f1", "ece",
+            "false_conveyor_accept_rate", "statistical_gate_passed", "integration_gate_passed"
+        ]},
         indent=2
     ))
 
