@@ -1,0 +1,84 @@
+{
+  "registry_version": "2026-08-12.training-01",
+  "principle": "Use large pretrained foundations where scale improves representation; keep safety/fusion gates small, calibrated and auditable rather than inflating parameter count.",
+  "models": [
+    {
+      "id": "vision_dinov3_vitl16",
+      "role": "industrial_visual_backbone",
+      "upstream": "facebookresearch/dinov3",
+      "checkpoint": "DINOv3 ViT-L/16 LVD-1689M",
+      "parameters": 300000000,
+      "pretraining_scale": "LVD-1689M (1.689B web images)",
+      "training_01_mode": "frozen_backbone_then_parameter_efficient_adapter",
+      "outputs": ["scene_embedding", "patch_embeddings", "industrial_scene_ood_score"],
+      "license": "DINOv3 License",
+      "status": "selected_with_license_review"
+    },
+    {
+      "id": "vision_sam3p1",
+      "role": "promptable_segmentation_and_tracking",
+      "upstream": "facebookresearch/sam3",
+      "checkpoint": "SAM 3.1",
+      "parameters": 848000000,
+      "training_01_mode": "zero_shot_baseline_then_adapter_or_detector_finetune_on_labeled_conveyor_data",
+      "outputs": ["belt_mask", "material_mask", "foreign_object_masks", "tracking_consistency"],
+      "license": "SAM License",
+      "status": "selected_gpu_required"
+    },
+    {
+      "id": "audio_dasheng_06b",
+      "role": "audio_vibration_representation",
+      "upstream": "XiaoMi/dasheng",
+      "checkpoint": "Dasheng-0.6B",
+      "parameters": 600000000,
+      "pretraining_scale": "272k hours general audio",
+      "training_01_mode": "frozen_or_partial_finetune_on_SSCC_then_small_fault_head",
+      "outputs": ["audio_embedding", "vibration_embedding", "fault_embedding"],
+      "license": "Apache-2.0",
+      "status": "selected"
+    },
+    {
+      "id": "timeseries_chronos2",
+      "role": "multivariate_process_and_electrical_forecasting",
+      "upstream": "amazon-science/chronos-forecasting",
+      "checkpoint": "amazon/chronos-2",
+      "parameters": 120000000,
+      "training_01_mode": "LoRA_finetune",
+      "outputs": ["probabilistic_forecast", "forecast_residual", "temporal_embedding", "anomaly_features"],
+      "license": "Apache-2.0",
+      "status": "selected"
+    },
+    {
+      "id": "operator_qwen3_06b",
+      "role": "operator_reasoning_explanation_and_test_planning",
+      "upstream": "QwenLM/Qwen3",
+      "checkpoint": "Qwen/Qwen3-0.6B",
+      "parameters": 600000000,
+      "training_01_mode": "LoRA_SFT_plus_RAG_plus_tool_call_grounding",
+      "outputs": ["plain_language_explanation", "ordered_verification_plan", "guided_test_selection", "operator_QA"],
+      "license": "Apache-2.0",
+      "safety_constraint": "May explain and plan checks only from structured evidence/tools; never originates safety-critical diagnosis or actuator command.",
+      "status": "selected_edge_candidate"
+    },
+    {
+      "id": "operator_qwen3_17b",
+      "role": "operator_reasoning_teacher_candidate",
+      "upstream": "QwenLM/Qwen3",
+      "checkpoint": "Qwen/Qwen3-1.7B",
+      "parameters": 1700000000,
+      "training_01_mode": "teacher_evaluation_or_QLoRA_if_GPU_memory_allows",
+      "outputs": ["teacher_responses", "hard_case_reasoning"],
+      "license": "Apache-2.0",
+      "status": "secondary_candidate"
+    },
+    {
+      "id": "flowtrust_fusion_calibrator_v2",
+      "role": "multimodal_trust_fusion",
+      "parameters": "small_by_design",
+      "training_01_mode": "calibrated_gradient_boosting_or_small_MLP_plus_conformal_calibration",
+      "inputs": ["vision_evidence", "process_residuals", "motor_fault_evidence", "source_quality", "temporal_consistency"],
+      "outputs": ["diagnostic_distribution", "calibrated_confidence", "abstain", "evidence_attribution"],
+      "status": "must_be_small_auditable_and_calibrated"
+    }
+  ]
+}
