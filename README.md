@@ -1,62 +1,99 @@
-# FLOWTRUST-AFR
+# FLOWTRUST-AFR — SIC2026
 
-**FLOWTRUST-AFR** is a read-only decision-support prototype for multimodal monitoring and diagnosis of **Alternative Fuels and Raw Materials (AFR)** feed chains in a cement-plant context.
+**FLOWTRUST-AFR** est un assistant de diagnostic industriel multimodal pour la chaîne d'alimentation en **Alternative Fuels and Raw Materials (AFR)** d'une cimenterie. Le MVP fonctionne exclusivement en **mode conseil / lecture seule** : aucune commande automatique n'est autorisée et la décision finale reste à l'opérateur.
 
-It fuses automation/process variables, electrical signatures and visual indicators to detect incoherent flow conditions and suggest an operator check. **The application never sends a control command; the final decision remains with the operator.**
+## Démonstration publique
 
-## What the public MVP demonstrates
+**Application :** https://flowtrust-afr-sic2026.vercel.app
 
-- multimodal fusion of process, electrical and visual features;
-- Random Forest classification for feed-chain dynamics;
-- Random Forest visual anomaly detection;
-- out-of-domain (OOD) abstention;
-- robust temporal evidence: Hampel, Theil–Sen, Student-t, CUSUM, Welch spectrum and cross-correlation;
-- physical-coherence rules for starvation, bridging/blockage, slippage and spillage;
-- operator-facing evidence and recommendation panel;
-- synthetic replay scenarios, explicitly separated from real SOCOCIM data.
+**API santé :** https://flowtrust-afr-sic2026.vercel.app/api/health
 
-## Safety / scope
+État vérifié du déploiement public : `version 0.2.0`, `advisory_read_only`, `automatic_control_allowed=false`, modèle principal `afr-rf-diagnostic-v1`.
 
-This repository is a hackathon MVP, not a plant protection layer and not a closed-loop controller. The intended pilot path is **read-only OPC UA → shadow mode → operator advice**. No automatic actuator command is part of the MVP.
+## Ce que le MVP surveille
 
-Public demonstration data are synthetic. Site-specific performance, savings or failure probabilities must not be claimed before calibration and validation on industrial data.
+La fusion exploite 25 caractéristiques couvrant notamment :
 
-## Local run
+- commande doseur et vitesse convoyeur ;
+- vitesse réelle et ratio de vitesse ;
+- débit massique mesuré et proxy visuel ;
+- désaccord entre débit pesé et estimation visuelle ;
+- niveau et dérivée de niveau de trémie ;
+- résidu de bilan matière ;
+- courant, charge et couple moteur ;
+- vibration ;
+- variabilité temporelle du débit et du courant ;
+- accumulation et déversement vus par caméra ;
+- qualité des signaux instrumentation et caméra.
+
+## Diagnostics démontrés
+
+Le replay public contient sept situations :
+
+1. fonctionnement nominal ;
+2. dérive du système de pesage ;
+3. pontage de trémie ;
+4. bourrage convoyeur ;
+5. déversement de matière ;
+6. alimentation instable ;
+7. observabilité insuffisante, avec abstention obligatoire.
+
+## Modèles actifs dans le déploiement v0.2.0
+
+- `afr-physics-rules-v1` — règles de cohérence physique ;
+- `afr-rf-diagnostic-v1` — classifieur diagnostic ;
+- `afr-isolation-known-domain-v1` — détection hors domaine / abstention ;
+- `opencv-fixed-camera-occupancy-v1` — baseline vision caméra fixe ;
+- `public-iron-ore-conveyor-extra-trees-v1` — prior visuel issu d'un convoyeur de minerai public ;
+- `uci-real-flow-dynamics-rf-v1` — preuve auxiliaire de transfert sur dynamique réelle hors domaine AFR.
+
+Deux adaptateurs vision restent volontairement non activés dans le MVP (`segformer-onnx-industrial-adapter-v1` et `visual-changenet-onnx-adapter-v1`) car les poids spécialisés et la calibration caméra de site ne sont pas disponibles.
+
+## Validation et limites
+
+Le modèle diagnostic principal a été évalué sur un banc **SIL synthétique** de 4 800 exemples, seed 2026, six classes. Le déploiement expose les métriques et les tests de torture via :
+
+- `/api/models`
+- `/api/validation`
+- `/api/scenarios`
+- `/api/datasets`
+
+Les performances du banc synthétique ne doivent **jamais** être présentées comme une performance SOCOCIM réelle. Les validations de transfert sur UCI Hydraulic Systems et sur le jeu d'images de convoyeur de minerai constituent uniquement des preuves auxiliaires hors domaine ciment/AFR.
+
+Les tests de robustesse du MVP vérifient notamment le bruit, les données manquantes, les capteurs bloqués, les pertes de rafales, la désynchronisation, les perturbations caméra et l'absence de violation du principe read-only.
+
+## Snapshot reproductible dans ce dépôt
+
+Le dépôt contient une reconstruction publique et auditable du cœur SIL :
+
+- `flowtrust_core.py` — générateur synthétique, règles physiques, contrôle d'observabilité ;
+- `train_models.py` — entraînement déterministe Random Forest + Isolation Forest ;
+- `api/main.py` — endpoint FastAPI de diagnostic en mode conseil ;
+- `index.html`, `styles.css`, `app.js` — miroir web léger pour lecture du concept ;
+- `requirements.txt` — dépendances Python.
+
+Le déploiement Vercel v0.2.0 reste la démonstration de référence. Le snapshot GitHub est conçu pour rendre la logique scientifique principale lisible et reproductible sans publier de données industrielles propriétaires.
+
+## Reproduire le cœur ML
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate       # Windows: .venv\Scripts\activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app:app --reload
+python train_models.py
+uvicorn api.main:app --reload
 ```
 
-Open `http://127.0.0.1:8000/index.html`.
+Les modèles sont générés localement dans `models/` afin d'éviter de versionner inutilement des artefacts binaires lourds.
 
-## API
+## Trajectoire pilote industriel
 
-- `GET /api/health`
-- `GET /api/schema`
-- `GET /api/demo?scenario=nominal|bridging|starvation|slippage|camera_degraded`
-- `POST /api/diagnose`
+Le premier pilote doit rester non intrusif : connexion OPC UA en lecture seule, acquisition des variables pertinentes, caméra industrielle fixe sur une zone AFR choisie, edge computer/IPC local, écran opérateur, journalisation, replay historique puis **shadow mode**. Le passage au mode conseil ne vient qu'après calibration et validation site. Toute écriture dans le SCADA ou tout contrôle automatique est hors périmètre du MVP.
 
-## Model artifacts
+## Sécurité et revendications
 
-The deployment artifacts are gzip-compressed joblib files and remain losslessly reloadable:
+FLOWTRUST-AFR n'est ni un SIS, ni une protection machine, ni un système certifié de contrôle-commande. Il s'agit d'un assistant de diagnostic et d'aide à la décision. Aucune économie, fiabilité, probabilité de panne ou performance site-specific ne doit être revendiquée avant une campagne de validation industrielle.
 
-- `models/dynamics_public.joblib.gz`
-- `models/vision_synthetic.joblib.gz`
-- `models/fusion_ood_synthetic.joblib.gz`
+## Licence
 
-`model_report.json` records the deterministic rebuild seed, validation metrics and exact artifact sizes.
-
-## Pilot infrastructure target
-
-The intended pilot is read-only and modest: one 24–27 inch operator display, an industrial PC or Jetson-class edge computer, a read-only OPC UA connection, and one fixed PoE industrial camera (IP67/IK10, WDR, 1080p or 4 MP) overlooking the selected AFR transfer point. Camera placement and final sensor list must be confirmed on site after a field survey.
-
-## Provenance
-
-The project direction uses public references/datasets discussed during development, including UCI Hydraulic Systems, an openly licensed cement-furnace dataset and an iron-ore conveyor dataset. Public datasets are validation references; they are not presented as SOCOCIM measurements.
-
-## License
-
-Code: MIT. Dataset licenses remain those of their respective sources.
+Code du snapshot public : MIT. Les jeux de données externes conservent leurs licences respectives.
