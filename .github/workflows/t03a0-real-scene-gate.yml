@@ -1,0 +1,115 @@
+name: FLOWTRUST T03-A0 real scene gate
+
+on:
+  push:
+    branches: [t03-vision-real]
+    paths:
+      - '.github/workflows/t03a0-real-scene-gate.yml'
+      - 'v3/training/prepare_t03_scene_gate.py'
+      - 'v3/training/t03_scene_gate.py'
+  workflow_dispatch:
+
+jobs:
+  t03-scene-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PYTHONUNBUFFERED: '1'
+      TORCH_HOME: ${{ github.workspace }}/.torch
+    steps:
+      - name: Checkout T03 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install CPU vision stack
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install 'numpy>=1.26,<3' 'scikit-learn>=1.6,<1.8' pillow imagehash joblib
+
+      - name: Download CoalAD from official ModelScope links
+        run: |
+          mkdir -p data/coalad
+          curl -L --fail --retry 5 --retry-delay 10 --max-time 1800 \
+            -o data/coalad/coal_ad_train.tar \
+            'https://www.modelscope.cn/datasets/lyfjwp/CoalAD/resolve/master/coal_ad_train.tar'
+          curl -L --fail --retry 5 --retry-delay 10 --max-time 1800 \
+            -o data/coalad/coal_ad_test.tar \
+            'https://www.modelscope.cn/datasets/lyfjwp/CoalAD/resolve/master/coal_ad_test.tar'
+          sha256sum data/coalad/*.tar | tee data/coalad/SHA256SUMS.txt
+          tar -xf data/coalad/coal_ad_train.tar -C data/coalad
+          tar -xf data/coalad/coal_ad_test.tar -C data/coalad
+          find data/coalad -maxdepth 3 -type d | head -50
+
+      - name: Download COCO 2017 validation hard negatives
+        run: |
+          mkdir -p data/coco
+          curl -L --fail --retry 5 --retry-delay 10 --max-time 1800 \
+            -o data/coco/val2017.zip \
+            'https://images.cocodataset.org/zips/val2017.zip'
+          sha256sum data/coco/val2017.zip | tee data/coco/SHA256SUMS.txt
+          unzip -q data/coco/val2017.zip -d data/coco
+
+      - name: Locate CoalAD root
+        id: coal
+        shell: bash
+        run: |
+          ROOT=$(find data/coalad -type d -path '*/coal_ad' -print -quit)
+          if [ -z "$ROOT" ]; then
+            ROOT=$(find data/coalad -type d -name train -printf '%h\n' | head -1)
+          fi
+          test -n "$ROOT" || { echo 'CoalAD root not found' >&2; exit 1; }
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          echo "CoalAD root: $ROOT"
+
+      - name: Build provenance manifest
+        run: |
+          mkdir -p artifacts/t03a0
+          python v3/training/prepare_t03_scene_gate.py \
+            --coal-root '${{ steps.coal.outputs.root }}' \
+            --negative-root data/coco/val2017 \
+            --out artifacts/t03a0/manifest.csv \
+            --max-positive 120 \
+            --max-negative 200 \
+            --seed 2026
+
+      - name: Train DINOv2-L 300M scene gate on real images
+        run: |
+          /usr/bin/time -v python v3/training/t03_scene_gate.py \
+            --manifest artifacts/t03a0/manifest.csv \
+            --outdir artifacts/t03a0 \
+            --batch-size 1 \
+            --seed 2026 \
+            --allow-cpu \
+            2>&1 | tee artifacts/t03a0/run.log
+
+      - name: Record runtime provenance
+        if: always()
+        run: |
+          python -m pip freeze > artifacts/t03a0/pip_freeze.txt || true
+          printf 'github_sha=%s\nbranch=%s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > artifacts/t03a0/runtime.txt
+          cp data/coalad/SHA256SUMS.txt artifacts/t03a0/coalad_sha256.txt 2>/dev/null || true
+          cp data/coco/SHA256SUMS.txt artifacts/t03a0/coco_sha256.txt 2>/dev/null || true
+          if [ -f artifacts/t03a0/metrics.json ]; then cat artifacts/t03a0/metrics.json; fi
+
+      - name: Upload T03-A0 evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOWTRUST_T03A0_${{ github.sha }}
+          path: |
+            artifacts/t03a0/metrics.json
+            artifacts/t03a0/manifest.csv
+            artifacts/t03a0/closed_test_predictions.csv
+            artifacts/t03a0/scene_gate_head.joblib
+            artifacts/t03a0/run.log
+            artifacts/t03a0/runtime.txt
+            artifacts/t03a0/pip_freeze.txt
+            artifacts/t03a0/*sha256*.txt
+          if-no-files-found: warn
+          retention-days: 14
