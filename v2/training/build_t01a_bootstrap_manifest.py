@@ -26,22 +26,29 @@ def add_chunked(rows, paths, label, source, license_name, chunk_size):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--coalad", type=Path, required=True, help="Root containing CoalAD train/test folders")
+    ap.add_argument("--positive-root", type=Path, help="Root containing real conveyor-scene images")
+    ap.add_argument("--coalad", type=Path, help="Backward-compatible alias for --positive-root")
+    ap.add_argument("--positive-source", default="coalad_2026")
+    ap.add_argument("--positive-license", default="dataset_terms_upstream")
     ap.add_argument("--negative-root", type=Path, required=True, help="High-resolution non-conveyor images")
     ap.add_argument("--out", type=Path, default=Path("data/manifests/t01a_bootstrap.csv"))
     ap.add_argument("--max-positive", type=int, default=3500)
     ap.add_argument("--max-negative", type=int, default=3500)
-    ap.add_argument("--positive-chunk", type=int, default=40, help="Approximate sequential-frame group size")
+    ap.add_argument("--positive-chunk", type=int, default=40, help="Approximate sequential-frame/waypoint group size")
     ap.add_argument("--negative-chunk", type=int, default=20)
     args = ap.parse_args()
 
-    positive = collect_images(args.coalad)
+    positive_root = args.positive_root or args.coalad
+    if positive_root is None:
+        raise ValueError("Provide --positive-root (or legacy --coalad)")
+
+    positive = collect_images(positive_root)
     positive = [p for p in positive if "ground_truth" not in {x.lower() for x in p.parts}]
     positive = [p for p in positive if "_mask" not in p.stem.lower()]
     negative = collect_images(args.negative_root)
 
     if not positive:
-        raise RuntimeError(f"No positive conveyor images under {args.coalad}")
+        raise RuntimeError(f"No positive conveyor images under {positive_root}")
     if not negative:
         raise RuntimeError(f"No negative images under {args.negative_root}")
 
@@ -55,8 +62,22 @@ def main():
     negative = spread(negative, args.max_negative)
 
     rows = []
-    add_chunked(rows, positive, "conveyor_applicable", "coalad_2026", "dataset_terms_upstream", args.positive_chunk)
-    add_chunked(rows, negative, "non_industrial", "coco2017_val_hard_negative", "per-image COCO/Flickr terms; evaluation/training only, not redistributed", args.negative_chunk)
+    add_chunked(
+        rows,
+        positive,
+        "conveyor_applicable",
+        args.positive_source,
+        args.positive_license,
+        args.positive_chunk,
+    )
+    add_chunked(
+        rows,
+        negative,
+        "non_industrial",
+        "coco2017_val_hard_negative",
+        "per-image COCO/Flickr terms; evaluation/training only, not redistributed",
+        args.negative_chunk,
+    )
 
     df = pd.DataFrame(rows)
     args.out.parent.mkdir(parents=True, exist_ok=True)
