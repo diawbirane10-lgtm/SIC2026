@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 from PIL import Image
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.frozen import FrozenEstimator
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import GroupShuffleSplit
@@ -122,8 +123,9 @@ def main():
     ])
     base.fit(embeddings[tr], y[tr])
 
-    # Calibrate probabilities on a group-disjoint validation set.
-    calibrated = CalibratedClassifierCV(base, method="sigmoid", cv="prefit")
+    # Calibration uses a group-disjoint validation set. FrozenEstimator prevents
+    # accidental refitting of the classifier on calibration data.
+    calibrated = CalibratedClassifierCV(estimator=FrozenEstimator(base), method="sigmoid")
     calibrated.fit(embeddings[va], y[va])
 
     proba = calibrated.predict_proba(embeddings[te])
