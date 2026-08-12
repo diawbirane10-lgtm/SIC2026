@@ -1,0 +1,16 @@
+{
+  "model_id": "afr-rf-diagnostic-v1",
+  "dataset": "synthetic_sil_v1",
+  "synthetic_data_only": true,
+  "seed": 2026,
+  "samples_per_class": 800,
+  "training_samples": 3600,
+  "test_samples": 1200,
+  "classes": ["conveyor_blockage","hopper_bridging","normal","spillage","unstable_feed","weighing_drift"],
+  "feature_names": ["feeder_command_pct","belt_speed_command_mps","belt_speed_mps","speed_ratio","measured_mass_flow_tph","visual_flow_proxy_tph","flow_disagreement_ratio","visual_occupancy_pct","hopper_level_pct","hopper_level_rate_pct_min","mass_balance_residual_abs_pct","motor_current_a","motor_load_ratio","motor_torque_pct","vibration_mm_s","flow_cv_60s","motor_current_cv_60s","visual_accumulation_pct","visual_spillage_pct","speed_signal_quality","weigh_signal_quality","level_signal_quality","electrical_signal_quality","camera_quality","camera_connected"],
+  "accuracy": 0.9991666666666666,
+  "balanced_accuracy": 0.9991666666666666,
+  "multiclass_log_loss": 0.009329448453099753,
+  "confusion_matrix": [[200,0,0,0,0,0],[0,200,0,0,0,0],[0,0,200,0,0,0],[0,0,0,200,0,0],[0,0,0,0,200,0],[0,0,1,0,0,199]],
+  "warning": "Les performances concernent uniquement le banc de donnees synthetiques SIL du snapshot GitHub et ne sont pas des performances SOCOCIM."
+}
