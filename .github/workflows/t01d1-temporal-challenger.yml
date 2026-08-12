@@ -1,0 +1,85 @@
+name: FLOWTRUST T01-D1 temporal challenger
+
+on:
+  push:
+    branches: [v2-model-rebuild]
+    paths:
+      - '.github/workflows/t01d1-temporal-challenger.yml'
+      - 'v2/training/t01_temporal_challenger.py'
+  workflow_dispatch:
+
+jobs:
+  temporal-challenger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout V2 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'numpy>=2,<3' 'scikit-learn>=1.6,<1.8' joblib
+
+      - name: Download UCI hydraulic real trajectories
+        run: |
+          mkdir -p data/uci
+          curl -L --fail --retry 5 --retry-delay 10 --max-time 1200 \
+            -o uci_hydraulic.zip \
+            'https://archive.ics.uci.edu/static/public/447/condition%2Bmonitoring%2Bof%2Bhydraulic%2Bsystems.zip'
+          sha256sum uci_hydraulic.zip | tee uci_hydraulic.sha256
+          unzip -q uci_hydraulic.zip -d data/uci
+
+      - name: Locate UCI dataset root
+        id: uci
+        shell: bash
+        run: |
+          PS1=$(find data/uci -type f -name PS1.txt -print -quit)
+          test -n "$PS1" || { echo 'PS1.txt not found' >&2; exit 1; }
+          ROOT=$(dirname "$PS1")
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          echo "UCI root: $ROOT"
+
+      - name: Run group-disjoint temporal challengers
+        run: |
+          mkdir -p artifacts/t01d1
+          /usr/bin/time -v python v2/training/t01_temporal_challenger.py \
+            --root '${{ steps.uci.outputs.root }}' \
+            --outdir artifacts/t01d1 \
+            --max-cycles 240 \
+            --windows-per-cycle 8 \
+            --context 64 \
+            --horizon 16 \
+            --seed 2026 \
+            2>&1 | tee artifacts/t01d1/run.log
+
+      - name: Record provenance
+        if: always()
+        run: |
+          mkdir -p artifacts/t01d1
+          cp uci_hydraulic.sha256 artifacts/t01d1/ 2>/dev/null || true
+          python -m pip freeze > artifacts/t01d1/pip_freeze.txt
+          printf 'github_sha=%s\n' "$GITHUB_SHA" > artifacts/t01d1/runtime.txt
+          if [ -f artifacts/t01d1/metrics.json ]; then cat artifacts/t01d1/metrics.json; fi
+
+      - name: Upload T01-D1 evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOWTRUST_T01D1_${{ github.sha }}
+          path: |
+            artifacts/t01d1/metrics.json
+            artifacts/t01d1/closed_test_outputs.npz
+            artifacts/t01d1/temporal_head.joblib
+            artifacts/t01d1/run.log
+            artifacts/t01d1/runtime.txt
+            artifacts/t01d1/pip_freeze.txt
+            artifacts/t01d1/*.sha256
+          if-no-files-found: warn
+          retention-days: 14
