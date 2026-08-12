@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#07100e" />
+  <title>FLOWTRUST-AFR · T02</title>
+  <style>body{margin:0;background:#07100e;color:#dcece5;font:14px system-ui;display:grid;place-items:center;min-height:100vh}#s{padding:20px;text-align:center}</style>
+</head>
+<body>
+  <div id="s">Chargement de FLOWTRUST-AFR T02…</div>
+  <script>
+  (async()=>{
+    const base='https://cdn.jsdelivr.net/gh/diawbirane10-lgtm/SIC2026@c03249856b4e6e701f94db2d6b01f17cf48ca07f/';
+    try{
+      let html=await(await fetch(base+'index.html',{cache:'no-store'})).text();
+      html=html
+        .replace('href="styles.css"','href="'+base+'styles.css"')
+        .replace('<script src="app.js"></'+'script>','<script src="'+base+'app.js"></'+'script><script src="'+base+'t02-live.js"></'+'script>');
+      document.open(); document.write(html); document.close();
+    }catch(error){
+      document.getElementById('s').textContent='Erreur de chargement : '+error.message;
+    }
+  })();
+  </script>
+</body>
+</html>
