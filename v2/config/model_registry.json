@@ -1,5 +1,5 @@
 {
-  "registry_version": "2026-08-12.training-01-r2",
+  "registry_version": "2026-08-12.training-01-r3",
   "principle": "Use large pretrained foundations where scale improves representation; keep safety/fusion gates small, calibrated and auditable rather than inflating parameter count.",
   "models": [
     {
@@ -42,7 +42,7 @@
       "role": "sensor_integrity_anomaly_imputation_and_multichannel_representation",
       "upstream": "moment-timeseries-foundation-model/moment",
       "checkpoint": "AutonLab/MOMENT-1-large",
-      "parameters": 300000000,
+      "parameters": 341231104,
       "pretraining_scale": "Time-series Pile; multi-dataset public time-series pretraining",
       "training_01_mode": "reconstruction_anomaly_baseline_plus_domain_head_or_PEFT_on_sensor_fault_windows",
       "outputs": ["reconstruction", "anomaly_scores", "sensor_embedding", "imputed_signal", "fault_features"],
