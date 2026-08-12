@@ -126,8 +126,8 @@
   <section class="view" id="view-validation">
     <div class="section-intro"><small>PREUVE TECHNIQUE</small><h1>Validation du MVP</h1><p>Cette page documente ce qui est validé numériquement et ce qui reste à confirmer sur données industrielles SOCOCIM.</p></div>
     <div class="validation-grid">
-      <section class="panel"><small>MODÈLE PRINCIPAL</small><h2>Random Forest (RF)</h2><p><b>RF = Random Forest</b>, un ensemble d'arbres de décision entraînés sur plusieurs sous-échantillons. Le vote agrégé produit le diagnostic et une probabilité de classe. Cette approche est utilisée ici car elle gère bien les variables hétérogènes et reste plus explicable qu'un réseau profond pour ce MVP.</p></section>
-      <section class="panel"><small>ABSTENTION</small><h2>Isolation Forest + qualité des sources</h2><p>Un second modèle détecte les points hors de l'enveloppe connue. Si les signaux sont incomplets, incohérents ou hors domaine, FLOWTRUST s'abstient plutôt que de forcer un diagnostic.</p></section>
+      <section class="panel"><small>MODÈLE PRINCIPAL</small><h2>Random Forest (RF)</h2><p><b>RF = Random Forest</b>, un ensemble d'arbres de décision entraînés sur plusieurs sous-échantillons. Son vecteur de probabilités sert de prior statistique ; T02 ne l'autorise jamais à contourner les gates de confiance.</p></section>
+      <section class="panel"><small>T02 — FUSION & ABSTENTION</small><h2>Procédé + électromécanique + vision</h2><p>Chaque modalité reçoit une fiabilité selon la qualité et la complétude des sources. Deux modalités indépendantes au minimum sont requises ; contradiction forte, faible marge ou observabilité insuffisante entraînent <b>UNKNOWN</b>.</p></section>
       <section class="panel"><small>BANC SIL</small><h2>4 800 cas synthétiques</h2><p>Six états connus + un scénario d'observabilité insuffisante. Ces résultats valident la logique de démonstration, pas une performance industrielle SOCOCIM.</p></section>
       <section class="panel"><small>DONNÉES RÉELLES AUXILIAIRES</small><h2>Transfert hors domaine</h2><p>Des jeux publics physiques sont utilisés à faible autorité pour tester certaines signatures dynamiques et visuelles. Ils ne remplacent pas les données du site.</p></section>
     </div>
@@ -141,5 +141,6 @@
 
 <footer>FLOWTRUST-AFR · SIC2026 · Mode conseil / lecture seule · Les données procédé de la démo sont synthétiques</footer>
 <script src="app.js"></script>
+<script src="app-t02.js"></script>
 </body>
 </html>
