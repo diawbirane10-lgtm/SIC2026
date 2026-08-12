@@ -24,6 +24,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Check HMI JavaScript syntax
+        run: |
+          node --check app.js
+          node --check app-t02.js
+
       - name: Run core tests
         run: python -m pytest -q
 
