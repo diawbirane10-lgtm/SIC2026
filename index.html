@@ -1,55 +1,132 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>FlowTrust AFR — SIC2026</title>
-<link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#071019" />
+  <meta name="description" content="FLOWTRUST-AFR - supervision et diagnostic multimodal de la chaîne AFR" />
+  <title>FLOWTRUST-AFR - Supervision opérateur</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="mark">FT</span><div><b>FlowTrust AFR</b><small>SIC2026 · surveillance multimodale en lecture seule</small></div></div>
-  <div class="status"><span class="dot"></span> Démo synthétique · Edge/Offline ready</div>
+  <div class="brand"><span class="mark">FT</span><div><b>FLOWTRUST-AFR</b><small>Assistant multimodal de diagnostic AFR</small></div></div>
+  <div class="live-status"><span class="dot"></span><b>LIVE SIMULATION</b><span class="divider"></span><span>SHADOW / READ-ONLY</span><span class="divider"></span><span id="clock">--:--:--</span></div>
 </header>
+<nav class="tabs" aria-label="Navigation principale">
+  <button class="tab active" data-view="supervision">Supervision</button>
+  <button class="tab" data-view="tests">Tests guidés</button>
+  <button class="tab" data-view="history">Historique & Replay</button>
+  <button class="tab" data-view="validation">Validation MVP</button>
+</nav>
+
 <main>
-<section class="hero">
-  <div>
-    <div class="eyebrow">Cimenterie · AFR feed-chain intelligence</div>
-    <h1>Détecter les dérives d’alimentation avant qu’elles ne deviennent des incidents procédé.</h1>
-    <p>Fusion des signaux procédé, électriques et visuels. FlowTrust n’envoie aucune commande au procédé : il explique, alerte et recommande une vérification à l’opérateur.</p>
-  </div>
-  <div class="hero-card"><div class="kpi"><span>Mode</span><b>READ ONLY</b></div><div class="kpi"><span>Décision</span><b>OPÉRATEUR</b></div><div class="kpi"><span>Données</span><b>SYNTHÉTIQUES</b></div></div>
-</section>
-<section class="grid-2">
-  <div class="panel control-panel">
-    <div class="panel-title"><div><small>SCÉNARIO</small><h2>Replay de démonstration</h2></div><span id="clock"></span></div>
-    <div class="scenario-buttons" id="scenarioButtons"></div>
-    <div class="stream" id="stream"></div>
-  </div>
-  <div class="panel diagnosis-panel">
-    <div class="panel-title"><div><small>FUSION IA</small><h2>Diagnostic courant</h2></div><span class="pill" id="confidencePill">—</span></div>
-    <div class="diagnosis" id="diagnosis"></div>
-    <div class="evidence"><h3>Éléments de preuve</h3><ul id="evidenceList"></ul></div>
-    <div class="recommendation" id="recommendation"></div>
-  </div>
-</section>
-<section class="grid-3">
-  <div class="panel mini"><small>Robustesse temporelle</small><h3>Hampel + Theil–Sen + CUSUM</h3><p>Filtrage robuste, tendance et rupture sans dépendre d’un unique échantillon.</p></div>
-  <div class="panel mini"><small>Signature électrique</small><h3>Welch + corrélation croisée</h3><p>Évalue cohérence charge–débit et indices de glissement/entraînement.</p></div>
-  <div class="panel mini"><small>Confiance</small><h3>Abstention OOD</h3><p>Si la qualité caméra ou la cohérence des variables sort du domaine, FlowTrust refuse de conclure.</p></div>
-</section>
-<section class="panel architecture">
-  <div><small>ARCHITECTURE PILOTE</small><h2>Du site industriel à l’aide à la décision</h2></div>
-  <div class="flow">
-    <div class="node"><b>SCADA / OPC UA</b><span>P, I, vitesse, débit, alarmes</span></div><div class="arrow">→</div>
-    <div class="node"><b>Caméra PoE</b><span>zone transfert AFR</span></div><div class="arrow">→</div>
-    <div class="node accent"><b>FlowTrust Edge</b><span>fusion + diagnostic + confiance</span></div><div class="arrow">→</div>
-    <div class="node"><b>Écran opérateur</b><span>preuve + recommandation</span></div>
-  </div>
-  <p class="footnote">Pilote conseillé : connexion en lecture seule, shadow mode puis mode conseil. Aucune écriture SCADA dans le MVP.</p>
-</section>
+  <section class="view active" id="view-supervision">
+    <div class="notice"><b>Démo temps réel.</b> Les variables procédé sont synthétiques. La caméra de ton appareil peut être utilisée en direct pour tester la branche vision, avec autorisation explicite du navigateur.</div>
+
+    <div class="workspace-grid">
+      <section class="panel process-panel">
+        <div class="panel-head"><div><small>CHAÎNE AFR</small><h2>Synoptique temps réel</h2></div><span class="tag">Ligne pilote</span></div>
+        <div class="synoptic">
+          <div class="machine"><span class="machine-icon">▰</span><b>TRÉMIE</b><strong id="synHopper">62 %</strong><small>Niveau</small></div>
+          <div class="connector">↓</div>
+          <div class="machine"><span class="machine-icon">◉</span><b>DOSEUR</b><strong id="synFeeder">70 %</strong><small>Commande</small></div>
+          <div class="connector">↓</div>
+          <div class="machine wide"><span class="machine-icon">⇢</span><b>CONVOYEUR AFR</b><strong id="synSpeed">1.58 m/s</strong><small>Vitesse réelle</small></div>
+          <div class="connector">→</div>
+          <div class="machine"><span class="machine-icon">⌁</span><b>TRANSFERT</b><strong id="synFlow">72 t/h</strong><small>Débit</small></div>
+        </div>
+
+        <div class="metric-grid" id="metricGrid"></div>
+      </section>
+
+      <section class="panel camera-panel">
+        <div class="panel-head"><div><small>VISION INDUSTRIELLE</small><h2>Caméra / CV</h2></div><span class="tag" id="cameraStatusTag">NON ACTIVÉE</span></div>
+        <div class="camera-stage">
+          <video id="cameraVideo" autoplay muted playsinline></video>
+          <div class="camera-placeholder" id="cameraPlaceholder"><span>◎</span><b>Caméra disponible à la demande</b><p>Appuie sur « Activer la caméra ». Le navigateur te demandera l'autorisation.</p></div>
+          <div class="roi" id="roiOverlay"><span>ROI convoyeur</span></div>
+          <div class="camera-overlay"><span id="cameraFps">FPS --</span><span id="cameraResolution">--</span></div>
+        </div>
+        <canvas id="cameraCanvas" hidden></canvas>
+        <div class="camera-actions">
+          <button class="primary" id="startCameraBtn">Activer la caméra</button>
+          <button id="switchCameraBtn" disabled>Changer de caméra</button>
+          <button id="runCvBtn" disabled>Analyser l'image</button>
+          <button id="stopCameraBtn" disabled>Couper</button>
+        </div>
+        <div class="cv-grid">
+          <div><small>Qualité image</small><b id="cvQuality">--</b></div>
+          <div><small>Luminosité</small><b id="cvBrightness">--</b></div>
+          <div><small>Contraste</small><b id="cvContrast">--</b></div>
+          <div><small>Netteté</small><b id="cvSharpness">--</b></div>
+        </div>
+        <p class="privacy-note">Traitement CV de démonstration effectué localement dans le navigateur. Aucune image n'est envoyée au backend dans cette version.</p>
+      </section>
+
+      <section class="panel diagnosis-panel">
+        <div class="panel-head"><div><small>FLOWTRUST AI</small><h2>Diagnostic courant</h2></div><span class="pill" id="confidencePill">--</span></div>
+        <div class="diagnosis-state" id="diagnosisState"></div>
+        <div class="source-health" id="sourceHealth"></div>
+        <div class="evidence"><h3>Pourquoi ?</h3><ul id="evidenceList"></ul></div>
+        <div class="recommendation" id="recommendation"></div>
+        <div class="diag-actions"><button id="explainBtn">Expliquer le diagnostic</button><button id="nextChecksBtn">Prochaines vérifications</button></div>
+      </section>
+    </div>
+
+    <section class="panel trend-panel">
+      <div class="panel-head"><div><small>TENDANCES</small><h2>Dernières minutes</h2></div><div class="legend"><span><i class="legend-flow"></i>Débit</span><span><i class="legend-current"></i>Courant</span><span><i class="legend-speed"></i>Vitesse</span></div></div>
+      <canvas id="trendCanvas" height="210"></canvas>
+    </section>
+
+    <section class="panel event-panel">
+      <div class="panel-head"><div><small>JOURNAL</small><h2>Événements récents</h2></div><button id="clearEventsBtn">Effacer</button></div>
+      <div id="eventLog" class="event-log"></div>
+    </section>
+  </section>
+
+  <section class="view" id="view-tests">
+    <div class="section-intro"><small>DIAGNOSTIC À LA DEMANDE</small><h1>Que souhaitez-vous vérifier ?</h1><p>L'opérateur peut déclencher un test ciblé sans envoyer de commande au procédé.</p></div>
+    <div class="test-grid">
+      <button class="test-card" data-test="sensor"><span>01</span><b>Tester un capteur</b><p>Stuck-at, bruit, dérive, valeurs manquantes et cohérence croisée.</p></button>
+      <button class="test-card" data-test="camera"><span>02</span><b>Tester caméra / CV</b><p>Connexion, luminosité, contraste, netteté et aptitude de l'image.</p></button>
+      <button class="test-card" data-test="drive"><span>03</span><b>Tester l'entraînement</b><p>Vitesse commandée/réelle, courant, charge, vibration et cohérence mécanique.</p></button>
+      <button class="test-card featured" data-test="coherence"><span>04</span><b>Tester la cohérence multimodale</b><p>Le test FLOWTRUST : les différentes sources racontent-elles la même histoire ?</p></button>
+      <button class="test-card" data-test="observability"><span>05</span><b>Tester l'observabilité</b><p>Vérifie si assez de sources fiables sont disponibles pour conclure.</p></button>
+      <button class="test-card" data-test="incident"><span>06</span><b>Injecter un scénario de démo</b><p>Déclenche une anomalie synthétique pour observer la réaction du moteur.</p></button>
+    </div>
+    <section class="panel test-result-panel">
+      <div class="panel-head"><div><small>RÉSULTAT DU TEST</small><h2 id="testResultTitle">Sélectionnez un test</h2></div><span class="tag" id="testResultStatus">EN ATTENTE</span></div>
+      <div id="testResultBody" class="test-result-body"><p>Les résultats, explications et suggestions apparaîtront ici.</p></div>
+    </section>
+  </section>
+
+  <section class="view" id="view-history">
+    <div class="section-intro"><small>HISTORIQUE & REPLAY</small><h1>Rejouer un incident</h1><p>Chaque scénario évolue progressivement pour visualiser le moment où FLOWTRUST détecte une incohérence.</p></div>
+    <section class="panel">
+      <div class="scenario-grid" id="scenarioButtons"></div>
+      <div class="replay-controls"><button class="primary" id="replayBtn">▶ Lancer le replay</button><button id="resetBtn">Réinitialiser au nominal</button></div>
+      <div class="replay-timeline" id="replayTimeline"></div>
+    </section>
+  </section>
+
+  <section class="view" id="view-validation">
+    <div class="section-intro"><small>PREUVE TECHNIQUE</small><h1>Validation du MVP</h1><p>Cette page documente ce qui est validé numériquement et ce qui reste à confirmer sur données industrielles SOCOCIM.</p></div>
+    <div class="validation-grid">
+      <section class="panel"><small>MODÈLE PRINCIPAL</small><h2>Random Forest (RF)</h2><p><b>RF = Random Forest</b>, un ensemble d'arbres de décision entraînés sur plusieurs sous-échantillons. Le vote agrégé produit le diagnostic et une probabilité de classe. Cette approche est utilisée ici car elle gère bien les variables hétérogènes et reste plus explicable qu'un réseau profond pour ce MVP.</p></section>
+      <section class="panel"><small>ABSTENTION</small><h2>Isolation Forest + qualité des sources</h2><p>Un second modèle détecte les points hors de l'enveloppe connue. Si les signaux sont incomplets, incohérents ou hors domaine, FLOWTRUST s'abstient plutôt que de forcer un diagnostic.</p></section>
+      <section class="panel"><small>BANC SIL</small><h2>4 800 cas synthétiques</h2><p>Six états connus + un scénario d'observabilité insuffisante. Ces résultats valident la logique de démonstration, pas une performance industrielle SOCOCIM.</p></section>
+      <section class="panel"><small>DONNÉES RÉELLES AUXILIAIRES</small><h2>Transfert hors domaine</h2><p>Des jeux publics physiques sont utilisés à faible autorité pour tester certaines signatures dynamiques et visuelles. Ils ne remplacent pas les données du site.</p></section>
+    </div>
+    <section class="panel architecture">
+      <small>TRAJECTOIRE PILOTE</small><h2>SCADA / OPC UA → Edge local → Caméra → Opérateur</h2>
+      <div class="flow"><div class="node"><b>SCADA / Historian</b><span>lecture seule</span></div><div class="arrow">→</div><div class="node"><b>Caméra PoE</b><span>zone AFR</span></div><div class="arrow">→</div><div class="node accent"><b>FLOWTRUST Edge</b><span>fusion + confiance</span></div><div class="arrow">→</div><div class="node"><b>Écran opérateur</b><span>preuve + suggestion</span></div></div>
+      <p class="footnote">Aucune écriture dans le SCADA, aucun asservissement automatique et aucune fonction SIS dans le MVP.</p>
+    </section>
+  </section>
 </main>
-<footer>FlowTrust AFR · Prototype SIC2026 · Démonstration synthétique reproductible · pas de mesure SOCOCIM réelle</footer>
+
+<footer>FLOWTRUST-AFR · SIC2026 · Mode conseil / lecture seule · Les données procédé de la démo sont synthétiques</footer>
 <script src="app.js"></script>
 </body>
 </html>
