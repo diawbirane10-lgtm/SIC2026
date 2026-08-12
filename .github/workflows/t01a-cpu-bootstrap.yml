@@ -1,0 +1,136 @@
+name: FLOWTRUST T01-A CPU bootstrap
+
+on:
+  push:
+    branches: [v2-model-rebuild]
+    paths:
+      - '.github/workflows/t01a-cpu-bootstrap.yml'
+      - 'v2/training/t01_scene_gate.py'
+      - 'v2/training/build_t01a_bootstrap_manifest.py'
+  workflow_dispatch:
+
+jobs:
+  scene-gate-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+    steps:
+      - name: Checkout V2 branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install CPU training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install 'transformers>=4.56,<5' 'huggingface-hub>=0.30' 'scikit-learn>=1.6,<1.8' pandas joblib pillow numpy
+
+      - name: Download CoalAD conveyor positives
+        run: |
+          mkdir -p data
+          curl -L --fail --retry 5 --retry-delay 10 \
+            -o coal_ad_train.tar \
+            'https://www.modelscope.cn/datasets/lyfjwp/CoalAD/resolve/master/coal_ad_train.tar'
+          sha256sum coal_ad_train.tar | tee coal_ad_train.sha256
+          tar -xf coal_ad_train.tar -C data
+          find data -maxdepth 4 -type d | head -50
+
+      - name: Download COCO hard negatives
+        run: |
+          curl -L --fail --retry 5 --retry-delay 10 \
+            -o val2017.zip \
+            'http://images.cocodataset.org/zips/val2017.zip'
+          sha256sum val2017.zip | tee coco_val2017.sha256
+          mkdir -p data/coco
+          unzip -q val2017.zip -d data/coco
+
+      - name: Locate CoalAD root
+        id: coalad
+        shell: bash
+        run: |
+          ROOT=$(find data -type d -path '*/coal_ad/train' -print -quit | sed 's#/train$##')
+          if [ -z "$ROOT" ]; then
+            ROOT=$(find data -type d -name train -print -quit | xargs -r dirname)
+          fi
+          if [ -z "$ROOT" ]; then
+            echo 'CoalAD root not found' >&2
+            find data -maxdepth 5 -type d | sort | head -200
+            exit 1
+          fi
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+          echo "CoalAD root: $ROOT"
+
+      - name: Build balanced bootstrap manifest
+        run: |
+          python v2/training/build_t01a_bootstrap_manifest.py \
+            --coalad '${{ steps.coalad.outputs.root }}' \
+            --negative-root data/coco/val2017 \
+            --out data/manifests/t01a_cpu_bootstrap.csv \
+            --max-positive 192 \
+            --max-negative 192 \
+            --positive-chunk 16 \
+            --negative-chunk 8
+          python - <<'PY'
+          import pandas as pd
+          p='data/manifests/t01a_cpu_bootstrap.csv'
+          d=pd.read_csv(p)
+          print(d.groupby(['source','label']).size())
+          print('rows', len(d), 'groups', d.group.nunique())
+          PY
+
+      - name: Run DINOv2-L 304M scene-gate bootstrap on CPU
+        run: |
+          mkdir -p artifacts/t01a_cpu_bootstrap
+          /usr/bin/time -v python v2/training/t01_scene_gate.py \
+            --manifest data/manifests/t01a_cpu_bootstrap.csv \
+            --model facebook/dinov2-large \
+            --batch-size 2 \
+            --allow-cpu \
+            --outdir artifacts/t01a_cpu_bootstrap \
+            2>&1 | tee artifacts/t01a_cpu_bootstrap/run.log
+
+      - name: Record provenance
+        if: always()
+        run: |
+          mkdir -p artifacts/t01a_cpu_bootstrap
+          cp coal_ad_train.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp coco_val2017.sha256 artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          cp data/manifests/t01a_cpu_bootstrap.csv artifacts/t01a_cpu_bootstrap/ 2>/dev/null || true
+          python -m pip freeze > artifacts/t01a_cpu_bootstrap/pip_freeze.txt
+          python - <<'PY' > artifacts/t01a_cpu_bootstrap/runtime.txt
+          import os, platform, torch
+          print('python=', platform.python_version())
+          print('platform=', platform.platform())
+          print('torch=', torch.__version__)
+          print('cuda_available=', torch.cuda.is_available())
+          print('github_sha=', os.environ.get('GITHUB_SHA'))
+          PY
+          if [ -f artifacts/t01a_cpu_bootstrap/metrics.json ]; then
+            cat artifacts/t01a_cpu_bootstrap/metrics.json
+          fi
+
+      - name: Upload T01-A0 evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLOWTRUST_T01A0_CPU_${{ github.sha }}
+          path: |
+            artifacts/t01a_cpu_bootstrap/metrics.json
+            artifacts/t01a_cpu_bootstrap/closed_test_predictions.csv
+            artifacts/t01a_cpu_bootstrap/scene_gate_head.joblib
+            artifacts/t01a_cpu_bootstrap/run.log
+            artifacts/t01a_cpu_bootstrap/runtime.txt
+            artifacts/t01a_cpu_bootstrap/pip_freeze.txt
+            artifacts/t01a_cpu_bootstrap/*.sha256
+            artifacts/t01a_cpu_bootstrap/t01a_cpu_bootstrap.csv
+          if-no-files-found: warn
+          retention-days: 14
