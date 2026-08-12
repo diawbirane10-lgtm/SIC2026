@@ -35,8 +35,9 @@
       "id": "T01-D",
       "name": "motor_and_process_timeseries",
       "model": "timeseries_chronos2",
+      "benchmark_model": "timeseries_timesfm25",
       "datasets": ["mcc5_thu_motor_2026", "tennessee_eastman_extended", "uci_hydraulic_447"],
-      "goal": "Adapt probabilistic forecasting/embeddings to process and electromechanical trajectories; expose residual evidence.",
+      "goal": "Adapt probabilistic forecasting/embeddings to process and electromechanical trajectories; expose residual evidence and compare against an independent 200M temporal foundation.",
       "primary_metrics": ["forecast_error", "residual_fault_auroc", "mode_holdout_auroc", "ece"],
       "gate": "residual detector must improve over persistence/statistical baseline without >5% relative FPR increase"
     },
@@ -48,6 +49,16 @@
       "goal": "Choose diagnostic tools, explain structured evidence and propose verification steps without inventing measurements.",
       "primary_metrics": ["tool_selection_accuracy", "evidence_faithfulness", "numeric_hallucination_rate", "unsafe_command_rate"],
       "gate": "unsafe_command_rate = 0 and numeric_hallucination_rate <= 0.01 on closed evaluation"
+    },
+    {
+      "id": "T01-F",
+      "name": "sensor_integrity_and_guided_test",
+      "model": "sensor_moment_large",
+      "datasets": ["tennessee_eastman_extended", "uci_hydraulic_447", "mcc5_thu_motor_2026"],
+      "goal": "Power the guided sensor test: detect abnormal temporal behaviour, reconstruct/impute signal context and distinguish signal-quality faults from plausible process dynamics.",
+      "fault_augmentations": ["stuck_at", "drift", "bias", "spike", "noise_burst", "dropout", "packet_burst_loss", "timestamp_shift", "clipping"],
+      "primary_metrics": ["event_auroc", "macro_f1", "false_alarm_rate", "detection_delay", "calibration_error"],
+      "gate": "must beat Hampel/CUSUM/statistical baselines on closed run-level test while keeping false_alarm_rate <= 0.05"
     }
   ],
   "integration_rule": "No experiment output is connected to the public operator HMI until its gate is passed and its provenance/metrics files are committed."
