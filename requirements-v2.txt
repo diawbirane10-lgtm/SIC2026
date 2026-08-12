@@ -9,6 +9,8 @@ datasets>=3.5
 safetensors>=0.5
 huggingface-hub>=0.30
 chronos-forecasting>=2.2.0
+momentfm>=0.1.4
+timesfm>=1.3.0
 pandas>=2.2
 pyarrow>=18
 numpy>=2.0,<3
@@ -28,3 +30,5 @@ pytest>=8,<9
 # DINOv3 backbones are supported by released Transformers >=4.56.0.
 # Official DINOv3/SAM weights retain their respective upstream licenses and
 # are never committed into this repository.
+# TimesFM 2.5 is tested in a separate environment if its dependency resolver
+# conflicts with Chronos/MOMENT; do not compromise the primary training env.
