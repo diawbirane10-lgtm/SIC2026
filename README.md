@@ -4,11 +4,16 @@
 
 ## Démonstration publique
 
-**Application :** https://flowtrust-afr-sic2026.vercel.app
-
+**Application :** https://flowtrust-afr-sic2026.vercel.app  
 **API santé :** https://flowtrust-afr-sic2026.vercel.app/api/health
 
 État vérifié du déploiement public : `version 0.2.0`, `advisory_read_only`, `automatic_control_allowed=false`, modèle principal `afr-rf-diagnostic-v1`.
+
+## Documentation rapide
+
+- [Architecture et logique de confiance](docs/ARCHITECTURE.md)
+- [Carte de validation et limites scientifiques](docs/VALIDATION.md)
+- [Proposition de pilote SOCOCIM](docs/PILOT_SOCOCIM.md)
 
 ## Ce que le MVP surveille
 
@@ -70,16 +75,18 @@ Le dépôt contient une reconstruction publique et auditable du cœur SIL :
 - `train_models.py` — entraînement déterministe Random Forest + Isolation Forest ;
 - `api/main.py` — endpoint FastAPI de diagnostic en mode conseil ;
 - `index.html`, `styles.css`, `app.js` — miroir web léger pour lecture du concept ;
-- `requirements.txt` — dépendances Python.
+- `tests/test_core.py` — tests de reproductibilité, observabilité et règles de sûreté ;
+- `.github/workflows/ci.yml` — CI de test et reconstruction du snapshot ML.
 
-Le déploiement Vercel v0.2.0 reste la démonstration de référence. Le snapshot GitHub est conçu pour rendre la logique scientifique principale lisible et reproductible sans publier de données industrielles propriétaires.
+Le déploiement Vercel v0.2.0 reste la démonstration de référence. Le snapshot GitHub rend la logique scientifique principale lisible et reproductible sans publier de données industrielles propriétaires.
 
 ## Reproduire le cœur ML
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
+pytest -q
 python train_models.py
 uvicorn api.main:app --reload
 ```
@@ -96,4 +103,4 @@ FLOWTRUST-AFR n'est ni un SIS, ni une protection machine, ni un système certifi
 
 ## Licence
 
-Code du snapshot public : MIT. Les jeux de données externes conservent leurs licences respectives.
+Code du snapshot public : [MIT](LICENSE). Les jeux de données externes conservent leurs licences respectives.
