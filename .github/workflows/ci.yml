@@ -29,8 +29,8 @@ jobs:
           node --check app.js
           node --check app-t02.js
 
-      - name: Run core tests
-        run: python -m pytest -q
-
       - name: Rebuild public ML snapshot
         run: python train_models.py
+
+      - name: Run core and API tests
+        run: python -m pytest -q
