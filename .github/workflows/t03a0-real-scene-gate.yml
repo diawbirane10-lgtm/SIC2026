@@ -51,7 +51,8 @@ jobs:
           mkdir -p data/coco
           curl -L --fail --retry 5 --retry-delay 10 --max-time 1800 \
             -o data/coco/val2017.zip \
-            'https://images.cocodataset.org/zips/val2017.zip'
+            'http://images.cocodataset.org/zips/val2017.zip'
+          echo '442b8da7639aecaf257c1dceb8ba8c80  data/coco/val2017.zip' | md5sum --check --strict
           sha256sum data/coco/val2017.zip | tee data/coco/SHA256SUMS.txt
           unzip -q data/coco/val2017.zip -d data/coco
 
@@ -91,6 +92,7 @@ jobs:
       - name: Record runtime provenance
         if: always()
         run: |
+          mkdir -p artifacts/t03a0
           python -m pip freeze > artifacts/t03a0/pip_freeze.txt || true
           printf 'github_sha=%s\nbranch=%s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > artifacts/t03a0/runtime.txt
           cp data/coalad/SHA256SUMS.txt artifacts/t03a0/coalad_sha256.txt 2>/dev/null || true
