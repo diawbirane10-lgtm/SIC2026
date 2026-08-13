@@ -65,9 +65,9 @@ def main():
         rows.append({
             'image_path': str(p),
             'label': 'non_conveyor',
-            'source': 'COCO-val2017-hard-negative',
-            'group': pseudo_group(p, 'coco'),
-            'license_note': 'evaluation/training only; source image licences retained',
+            'source': 'Imagenette-160-hard-negative',
+            'group': pseudo_group(p, 'imagenette'),
+            'license_note': 'Imagenette (fastai), ImageNet-derived evaluation/training images; source terms retained',
         })
 
     with args.out.open('w', newline='', encoding='utf-8') as f:
