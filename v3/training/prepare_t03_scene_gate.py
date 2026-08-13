@@ -9,17 +9,23 @@ from pathlib import Path
 from PIL import Image
 
 EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+EXCLUDED_POSITIVE_PARTS = {'ground_truth', 'ground-truth', 'mask', 'masks', 'annotations', 'annotation'}
 
 
-def images_under(root: Path):
+def images_under(root: Path, *, exclude_parts: set[str] | None = None):
+    excluded = {p.lower() for p in (exclude_parts or set())}
     for p in root.rglob('*'):
-        if p.is_file() and p.suffix.lower() in EXTS:
-            try:
-                with Image.open(p) as im:
-                    if im.width >= 128 and im.height >= 128:
-                        yield p
-            except Exception:
-                continue
+        if not p.is_file() or p.suffix.lower() not in EXTS:
+            continue
+        lowered_parts = {part.lower() for part in p.parts}
+        if lowered_parts & excluded:
+            continue
+        try:
+            with Image.open(p) as im:
+                if im.width >= 128 and im.height >= 128:
+                    yield p
+        except Exception:
+            continue
 
 
 def stable_sample(paths, n, seed):
@@ -46,10 +52,19 @@ def main():
     ap.add_argument('--seed', type=int, default=2026)
     args = ap.parse_args()
 
-    pos = stable_sample(list(images_under(args.coal_root)), args.max_positive, args.seed)
+    # IMPORTANT: CoalAD ground_truth contains segmentation masks, not camera scenes.
+    # Including them as positives creates a trivial dataset-source shortcut and invalidates
+    # the scene-gate evaluation. Only actual camera images are eligible here.
+    pos = stable_sample(
+        list(images_under(args.coal_root, exclude_parts=EXCLUDED_POSITIVE_PARTS)),
+        args.max_positive,
+        args.seed,
+    )
     neg = stable_sample(list(images_under(args.negative_root)), args.max_negative, args.seed + 1)
     if len(pos) < 40 or len(neg) < 80:
         raise RuntimeError(f'Not enough usable images: positive={len(pos)}, negative={len(neg)}')
+    if any('ground_truth' in {part.lower() for part in p.parts} for p in pos):
+        raise RuntimeError('Dataset contamination: CoalAD ground_truth mask entered positive scenes')
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -57,9 +72,9 @@ def main():
         rows.append({
             'image_path': str(p),
             'label': 'conveyor_applicable',
-            'source': 'CoalAD',
+            'source': 'CoalAD-camera-only',
             'group': pseudo_group(p, 'coalad'),
-            'license_note': 'CoalAD official repository/source; verify dataset terms before redistribution',
+            'license_note': 'CoalAD official repository/source; camera images only; verify dataset terms before redistribution',
         })
     for p in neg:
         rows.append({
