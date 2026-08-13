@@ -46,15 +46,17 @@ jobs:
           tar -xf data/coalad/coal_ad_test.tar -C data/coalad
           find data/coalad -maxdepth 3 -type d | head -50
 
-      - name: Download COCO 2017 validation hard negatives
+      - name: Download Imagenette 160 hard negatives
         run: |
-          mkdir -p data/coco
+          set -euxo pipefail
+          mkdir -p data/imagenette
           curl -L --fail --retry 5 --retry-delay 10 --max-time 1800 \
-            -o data/coco/val2017.zip \
-            'http://images.cocodataset.org/zips/val2017.zip'
-          echo '442b8da7639aecaf257c1dceb8ba8c80  data/coco/val2017.zip' | md5sum --check --strict
-          sha256sum data/coco/val2017.zip | tee data/coco/SHA256SUMS.txt
-          unzip -q data/coco/val2017.zip -d data/coco
+            -o data/imagenette/imagenette2-160.tgz \
+            'https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz'
+          sha256sum data/imagenette/imagenette2-160.tgz | tee data/imagenette/SHA256SUMS.txt
+          tar -xzf data/imagenette/imagenette2-160.tgz -C data/imagenette
+          test -d data/imagenette/imagenette2-160
+          find data/imagenette/imagenette2-160 -type f | head -20 || true
 
       - name: Locate CoalAD root
         id: coal
@@ -73,7 +75,7 @@ jobs:
           mkdir -p artifacts/t03a0
           python v3/training/prepare_t03_scene_gate.py \
             --coal-root '${{ steps.coal.outputs.root }}' \
-            --negative-root data/coco/val2017 \
+            --negative-root data/imagenette/imagenette2-160 \
             --out artifacts/t03a0/manifest.csv \
             --max-positive 120 \
             --max-negative 200 \
@@ -96,7 +98,7 @@ jobs:
           python -m pip freeze > artifacts/t03a0/pip_freeze.txt || true
           printf 'github_sha=%s\nbranch=%s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > artifacts/t03a0/runtime.txt
           cp data/coalad/SHA256SUMS.txt artifacts/t03a0/coalad_sha256.txt 2>/dev/null || true
-          cp data/coco/SHA256SUMS.txt artifacts/t03a0/coco_sha256.txt 2>/dev/null || true
+          cp data/imagenette/SHA256SUMS.txt artifacts/t03a0/imagenette_sha256.txt 2>/dev/null || true
           if [ -f artifacts/t03a0/metrics.json ]; then cat artifacts/t03a0/metrics.json; fi
 
       - name: Upload T03-A0 evidence bundle
